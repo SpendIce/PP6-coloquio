@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lección 3 · Persistencia y concurrencia</title>
+<link rel="stylesheet" href="../assets/curso.css">
+</head>
+<body>
+<main>
+
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 3 de 7 · ~20 minutos</p>
+<h1>Persistencia y concurrencia</h1>
+<p class="subtitulo">Cómo la base garantiza lo que el dominio promete, aunque lleguen diez pedidos a la vez.</p>
+
+<div class="victoria">
+  <strong>Al terminar vas a poder:</strong> explicar por qué dos creaciones simultáneas nunca reciben el
+  mismo alias, y qué garantiza cada restricción del esquema.
+</div>
+
+<h2>0. Repaso de la lección 2</h2>
+
+<section class="ejercicio quiz" data-correcta="c">
+  <p class="pregunta">¿Dónde se guarda en qué número va la secuencia de códigos nuevos?</p>
+  <div class="opciones">
+    <button data-op="a">En memoria</button>
+    <button data-op="b">En application.yml</button>
+    <button data-op="c">En generador_alias</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Se perdería al reiniciar, y el próximo arranque emitiría códigos repetidos.</p>
+  <p class="devolucion" data-op="b" hidden>✘ La configuración no cambia en ejecución.</p>
+  <p class="devolucion" data-op="c" hidden>✔ Una sola fila con <code>proximo_indice</code>. Y esa fila es, además, la que se bloquea: eso es lo que vemos hoy.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">Vencidos <code>5</code> y <code>Qa</code>. ¿Qué recibe la próxima creación?</p>
+  <div class="opciones">
+    <button data-op="a">"5"</button>
+    <button data-op="b">"Qa"</button>
+    <button data-op="c">Uno nuevo</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Se recicla el más corto.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Es candidato, pero <code>5</code> es más corto.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Mientras haya vencidos, se reciclan.</p>
+</section>
+
+<h2>1. Tres tablas, tres entidades <span class="tag c">C</span> JPA/Hibernate</h2>
+
+<pre><code>alias            (codigo PK, asignacion_actual_id)          ← AliasEntity
+asignacion       (id PK IDENTITY, alias_codigo, destino,    ← AssignmentEntity
+                  creada_en, vence_en)
+generador_alias  (id = 1, proximo_indice)                   ← CodeGeneratorEntity</code></pre>
+
+<p>Las entidades JPA (<code>@Entity</code>) <strong>no son</strong> los objetos del dominio. <code>Assignment</code> es un
+<code>record</code> inmutable del dominio; <code>AssignmentEntity</code> es una clase mutable con constructor vacío, que es
+lo que JPA exige. <code>JpaAssignmentStore.toDomain()</code> traduce de una a otra. Así el dominio no se entera de que
+existe JPA, y las entidades no aparecen en la API, porque la API usa DTOs <span class="tag t">ADR 0001</span>.</p>
+
+<p>Los <code>*JpaRepository</code> son interfaces de Spring Data: Spring genera la implementación. El único SQL escrito a
+mano es <code>findRecyclableCodes</code> (JPQL): «los alias cuya asignación actual vence antes o justo en este instante».</p>
+
+<h2>2. Lo que garantiza el esquema <span class="tag t">T</span></h2>
+
+<p>Abrí <a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/src/main/resources/db/migration/V1__esquema_inicial.sql"><code>V1__esquema_inicial.sql</code></a>.
+Tiene tres restricciones que valen oro en el coloquio:</p>
+
+<pre><code>UNIQUE (alias_codigo, id)                          en asignacion
+FOREIGN KEY (codigo, asignacion_actual_id)         en alias
+   REFERENCES asignacion (alias_codigo, id)
+FOREIGN KEY (alias_codigo) REFERENCES alias        en asignacion</code></pre>
+
+<ul>
+  <li><strong>La FK compuesta</strong> hace que el alias <code>7</code> solo pueda apuntar a una asignación
+  <em>del alias <code>7</code></em>. Una FK simple a <code>asignacion(id)</code> permitiría apuntar a la de otro
+  alias. Lo garantiza la base, no un <code>if</code> en Java.</li>
+  <li><strong>El <code>UNIQUE (alias_codigo, id)</code></strong> parece redundante, porque <code>id</code> ya es PK. Está
+  porque una FK compuesta necesita, del otro lado, una restricción única sobre esas mismas dos columnas.</li>
+  <li><strong>Las FK son circulares</strong> (alias → asignacion → alias). Por eso la segunda se agrega con
+  <code>ALTER TABLE</code>, y por eso <code>JpaAliasStore</code> hace <code>saveAndFlush</code> del alias <em>antes</em> de
+  insertar la asignación. <code>asignacion_actual_id</code> admite <code>NULL</code> para el instante intermedio.</li>
+</ul>
+
+<h2>3. Flyway y <code>ddl-auto: validate</code> <span class="tag t">T</span></h2>
+
+<p>El esquema lo escriben <strong>migraciones versionadas</strong>: <code>V1__</code> crea las tablas y <code>V2__</code>
+agrega el índice sobre <code>vence_en</code>. Flyway las aplica una sola vez, en orden, y lo registra en su tabla de historial.
+Hibernate <em>no crea nada</em>: con <code>validate</code> solo verifica que las entidades coincidan con las tablas y,
+si no coinciden, la aplicación no arranca. ¿Por qué así? Porque en las etapas 2 y 3 el esquema va a cambiar
+<strong>con datos adentro</strong>, y una migración versionada es reproducible, mientras que <code>ddl-auto=update</code> no lo es.</p>
+
+<h3>Ojo: el perfil HSQLDB (PR #14)</h3>
+
+<p>En GitHub, <code>main</code> ahora usa Gradle y tiene un perfil <code>hsqldb</code> para correr sin Docker
+(<code>./gradlew hsqldbServer</code> + <code>./gradlew bootRun -Phsqldb</code>). En ese perfil:</p>
+
+<pre><code>flyway.enabled: false            el esquema lo crea spring.sql.init con db/hsqldb/schema.sql
+ddl-auto: none                   Hibernate NO valida
+TIMESTAMP (no TIMESTAMPTZ)       VARCHAR(8192) (no TEXT)</code></pre>
+
+<p>Tené preparadas estas posibles preguntas del profe, con respuestas honestas:</p>
+<ul>
+  <li><strong>«¿No que el ADR 0004 decía PostgreSQL?»</strong> Sí: PostgreSQL sigue siendo el motor de la
+  app y de <em>todos</em> los tests (Testcontainers). HSQLDB es una comodidad para levantar el servicio sin Docker,
+  <strong>sin tests automáticos</strong>. El ADR no se actualizó para mencionarlo.</li>
+  <li><strong>«¿Por qué no Flyway en HSQLDB?»</strong> El PR dice que «Flyway 11 eliminó el soporte de HSQLDB».
+  <strong>Esto está en duda:</strong> en Maven Central existe <code>org.flywaydb:flyway-database-hsqldb</code>,
+  publicado hasta la 11.8.2. Es probable que solo faltara agregar ese módulo, como ya se hizo con
+  <code>flyway-database-postgresql</code>. No lo probé. Si te lo preguntan, la respuesta honesta es que
+  hay dos fuentes del esquema (las migraciones y <code>schema.sql</code>) que se mantienen a mano, y que unificarlas
+  es una mejora pendiente.</li>
+</ul>
+
+<h2>4. La concurrencia: un candado para toda la selección</h2>
+
+<p>El problema: llegan dos <code>POST</code> a la vez y hay un solo alias vencido, el <code>5</code>. Sin coordinación,
+los dos leen «el 5 está libre», los dos lo toman, y una asignación pisa a la otra.</p>
+
+<pre><code>CreateLink.create   @Transactional ─────────────────────────────── abre la transacción
+  JpaAliasStore.claim
+    generator.findById(1)  @Lock(PESSIMISTIC_WRITE)                  SELECT … FOR UPDATE
+        ── el segundo pedido ESPERA acá hasta el commit del primero ──
+    findRecyclableCodes(ahora) → AliasRecycling / AliasSequence
+  AssignmentStore.save · AliasStore.assignCurrent
+COMMIT ─────────────────────────────────────────────────────────── libera el candado</code></pre>
+
+<ul>
+  <li><strong>Qué serializa:</strong> <em>toda</em> la selección (reciclar o generar), no solo el contador. Por eso
+  dos pedidos tampoco pueden saltearse un vencido más corto.</li>
+  <li><strong>Atomicidad:</strong> validación, reserva, asignación y referencia van en la misma transacción. Si
+  algo falla, se deshace todo, y nunca queda un alias reservado sin asignación.</li>
+  <li><strong>Lectores:</strong> <code>ResolveLink</code> es <code>readOnly</code> y no toma el candado. En PostgreSQL
+  (READ COMMITTED) ve la asignación anterior completa o la nueva completa, nunca una mezcla. El test es
+  <code>unaResolucionDuranteLaReasignacionLeeSiempreLaMismaAsignacion</code>.</li>
+</ul>
+
+<h3>El tradeoff que te van a preguntar</h3>
+
+<p>Un candado global hace que <strong>las creaciones vayan de a una</strong>. Es un cuello de botella aceptado a
+conciencia: con 10 clientes simultáneos, la creación midió p95 = 113 ms, contra un objetivo de 1 s
+(<a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/docs/evidencia-capacidad.md">evidencia</a>). Si la
+carga creciera, el cambio queda <em>dentro del adaptador</em>: bloquear por alias candidato con
+<code>FOR UPDATE SKIP LOCKED</code>, o usar contadores por longitud. Ganarías paralelismo y pagarías en complejidad y
+en garantías más difíciles de testear. El caso de uso, el dominio y el contrato no cambian, y esa es la prueba de que
+las capas sirven.</p>
+
+<p class="nota">Otro punto fino: <code>findRecyclableCodes</code> trae <em>todos</em> los vencidos y el mínimo se elige
+en Java. Se podría resolver en SQL (<code>ORDER BY length(codigo), codigo LIMIT 1</code>), pero la política de prioridad
+saldría del dominio y quedaría en el SQL. Se eligió dejarla testeable en el dominio. La lista está acotada por la
+cantidad de alias, no por el historial.</p>
+
+<hr>
+
+<h2>5. Practicá</h2>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">Dos POST simultáneos, un solo vencido (<code>5</code>). ¿Qué pasa?</p>
+  <div class="opciones">
+    <button data-op="a">Los dos reciben el "5"</button>
+    <button data-op="b">Uno recibe "5", otro uno nuevo</button>
+    <button data-op="c">Uno de los dos falla con 500</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Eso es justo lo que el candado impide.</p>
+  <p class="devolucion" data-op="b" hidden>✔ El segundo espera el commit del primero, vuelve a buscar vencidos (ya no hay) y genera uno nuevo. El test es <code>competicionPorUnAliasVencidoLoObtieneExactamenteUnaCreacion</code>.</p>
+  <p class="devolucion" data-op="c" hidden>✘ No hay error: el segundo pedido solo espera unos milisegundos.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Para qué está <code>UNIQUE (alias_codigo, id)</code> si <code>id</code> ya es PK?</p>
+  <div class="opciones">
+    <button data-op="a">Para que la FK compuesta pueda referenciarla</button>
+    <button data-op="b">Para acelerar la búsqueda de los vencidos</button>
+    <button data-op="c">Para impedir dos asignaciones por cada alias</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Una FK necesita una clave única del otro lado, sobre exactamente esas columnas.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Para eso está el índice <code>ix_asignacion_vence_en</code> (V2).</p>
+  <p class="devolucion" data-op="c" hidden>✘ Al revés: un alias <em>tiene</em> muchas asignaciones, que son su historial.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="c">
+  <p class="pregunta">Con <code>ddl-auto: validate</code>, ¿quién crea las tablas en PostgreSQL?</p>
+  <div class="opciones">
+    <button data-op="a">Hibernate</button>
+    <button data-op="b">Docker</button>
+    <button data-op="c">Flyway</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Hibernate solo compara entidades con tablas; si no coinciden, no arranca.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Docker solo levanta un PostgreSQL vacío.</p>
+  <p class="devolucion" data-op="c" hidden>✔ Corre <code>V1__</code> y <code>V2__</code> al iniciar y registra cuáles ya aplicó.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">¿Por qué <code>JpaAliasStore</code> hace <code>saveAndFlush</code> del alias nuevo?</p>
+  <div class="opciones">
+    <button data-op="a">Para liberar el candado antes</button>
+    <button data-op="b">La asignación lo referencia por FK</button>
+    <button data-op="c">Para que lo vean otros lectores</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ El candado se libera recién con el commit.</p>
+  <p class="devolucion" data-op="b" hidden>✔ La asignación se inserta en el acto (por <code>IDENTITY</code>) y su FK exige que la fila del alias ya exista.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Nadie más lo ve hasta el commit: el flush no confirma la transacción.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">Una resolución lee el alias justo mientras se lo reasigna. ¿Qué puede ver?</p>
+  <div class="opciones">
+    <button data-op="a">La asignación vieja o la nueva</button>
+    <button data-op="b">Destino viejo con vencimiento nuevo</button>
+    <button data-op="c">Siempre espera a que termine</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Lee una sola fila de asignación, ya confirmada: 404 si es la vieja (vencida) o 302 al destino nuevo.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Destino y vencimiento salen de la <em>misma</em> fila, así que no se pueden mezclar.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Los lectores no toman el candado del generador: no esperan.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="c">
+  <p class="pregunta">En el perfil <code>hsqldb</code>, ¿quién crea el esquema?</p>
+  <div class="opciones">
+    <button data-op="a">Flyway</button>
+    <button data-op="b">Hibernate</button>
+    <button data-op="c">spring.sql.init</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Está desactivado en ese perfil (<code>flyway.enabled: false</code>).</p>
+  <p class="devolucion" data-op="b" hidden>✘ <code>ddl-auto: none</code>: Hibernate ni crea ni valida.</p>
+  <p class="devolucion" data-op="c" hidden>✔ Corre <code>db/hsqldb/schema.sql</code> en cada arranque, con <code>IF NOT EXISTS</code> y <code>continue-on-error</code> para el <code>ALTER</code> de la FK circular.</p>
+</section>
+
+<p class="marcador" data-quiz-marcador></p>
+
+<section class="ejercicio oral" data-segundos="90">
+  <p class="pregunta">En voz alta: «¿Cómo garantizan que dos creaciones simultáneas no reciban el mismo alias? ¿Escala?»</p>
+  <details class="modelo">
+    <summary>Respuesta modelo</summary>
+    <p>«La creación entera corre en una transacción. Lo primero que hace la reserva es un <code>SELECT … FOR UPDATE</code>
+    sobre la única fila de <code>generador_alias</code>, así que la segunda creación espera hasta el commit de la
+    primera. Recién ahí busca vencidos o genera un código nuevo, y ya ve lo que la primera confirmó. Los lectores no
+    toman ese candado, así que las redirecciones no se frenan. ¿Escala? Para el objetivo acordado, sí: 10 clientes,
+    p95 de 113 ms en creación. Para más carga, el cambio queda contenido en el adaptador JPA, por ejemplo con
+    <code>SKIP LOCKED</code> por alias, sin tocar dominio, casos de uso ni contrato. Lo prueban los tests de
+    <code>ConcurrenciaHttpTest</code> contra PostgreSQL real.»</p>
+  </details>
+</section>
+
+<hr>
+
+<h2>Para leer</h2>
+<p><strong>Fuente primaria:</strong> PostgreSQL 16,
+<a href="https://www.postgresql.org/docs/16/explicit-locking.html">«Explicit Locking»</a>, sección 13.3.2,
+<em>Row-Level Locks</em>: qué bloquea <code>FOR UPDATE</code> y qué no. Después,
+<a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/docs/especificacion-tecnica.md">especificación técnica</a>,
+sección «Coordinación transaccional»: es exactamente esta lección, con más detalle.</p>
+
+<p>← <a href="0002-alias-secuencia-reciclaje-vencimiento.html">Lección 2</a> ·
+<a href="../reference/mapa-del-codigo.html">Mapa del código</a> ·
+<a href="0004-http-y-contrato.html">Lección 4: HTTP y contrato</a> →</p>
+
+<p class="victoria">¿Dudas? Preguntame, por ejemplo: «simulá conmigo dos transacciones paso a paso» o
+«¿qué pasaría sin el candado?».</p>
+
+</main>
+<script src="../assets/quiz.js"></script>
+<script src="../assets/oral.js"></script>
+</body>
+</html>

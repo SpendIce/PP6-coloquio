@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lección 6 · Tests y evidencia</title>
+<link rel="stylesheet" href="../assets/curso.css">
+</head>
+<body>
+<main>
+
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 6 de 7 · ~15 minutos</p>
+<h1>Tests y evidencia</h1>
+<p class="subtitulo">«¿Cómo sabés que funciona?» es la pregunta más probable. Esta lección es la respuesta.</p>
+
+<div class="victoria">
+  <strong>Al terminar vas a poder:</strong> para cualquier requisito, nombrar el test que lo prueba, en qué
+  nivel corre y por qué en ese nivel.
+</div>
+
+<h2>0. Repaso de la lección 5</h2>
+
+<section class="ejercicio quiz" data-correcta="c">
+  <p class="pregunta">¿Dónde se valida la URL que escribe el usuario en la web?</p>
+  <div class="opciones">
+    <button data-op="a">En app.js</button>
+    <button data-op="b">En el HTML</button>
+    <button data-op="c">En el servidor</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ <code>app.js</code> manda el texto tal cual.</p>
+  <p class="devolucion" data-op="b" hidden>✘ El formulario tiene <code>novalidate</code> a propósito.</p>
+  <p class="devolucion" data-op="c" hidden>✔ En <code>DestinationValidator</code>: una sola regla para la web y las extensiones.</p>
+</section>
+
+<h2>1. La pirámide del TP <span class="tag c">C</span> unitarias + integración</h2>
+
+<pre><code>                 ┌─ manual: demo física, celular escanea el QR    docs/evidencia-demo/manual
+               ┌─┴─ scripts: demo integrada y capacidad (Node)     scripts/demo, scripts/capacidad
+             ┌─┴─── integración HTTP + PostgreSQL real            *HttpTest  (Testcontainers)
+           ┌─┴───── aplicación con puertos falsos                  CreateLinkTest, ResolveLinkTest
+         ┌─┴─────── dominio puro                                   AliasSequenceTest, AssignmentTest…
+         └ JS (node --test): QR decodificado, extensiones         src/test/js, extensiones/tests</code></pre>
+
+<ul>
+  <li><strong>Dominio</strong>: milisegundos, sin Spring ni base. Prueba las reglas solas: alfabeto, secuencia,
+  reciclaje, vencimiento y validación (con <code>@Nested</code> para separar válidos y rechazos).</li>
+  <li><strong>Aplicación</strong>: <code>CreateLink</code> con <code>InMemoryStores</code>, que son implementaciones
+  falsas de los puertos. Es la recompensa de la arquitectura hexagonal (lección 1).</li>
+  <li><strong>Integración HTTP</strong>: levanta Spring entero y le pega por HTTP real, con un PostgreSQL real en Docker
+  (Testcontainers, <span class="tag q">Q14</span> ADR 0004). Acá se prueba lo que solo existe junto: transacciones,
+  candados, FKs, reinicios y el contrato.</li>
+</ul>
+
+<p>Comando (desde el PR #14, con Gradle): <code>./gradlew test</code>. Según el PR, son 95 tests en verde. Más
+<code>node --test</code> en <code>src/test/js/</code> y en <code>extensiones/</code>. <em>Ojo:</em> el perfil HSQLDB no
+tiene tests automáticos, porque todos usan PostgreSQL.</p>
+
+<h2>2. Tres trucos que vale la pena explicar</h2>
+
+<h3>El tiempo se controla: <code>MutableClock</code></h3>
+<p>Nadie espera 60 minutos. Los casos de uso reciben un <code>java.time.Clock</code> inyectado. En los tests,
+<code>ClockTestConfiguration</code> lo reemplaza (<code>@Primary</code>) por un <code>MutableClock</code> que el test adelanta:
+«creo a las T0; reloj un nanosegundo antes de T0+60 → 302; reloj justo en T0+60 → 404». No hay endpoint público para mover el
+reloj: el truco existe solo en <code>src/test</code>. Lo ves en <code>VencimientoHttpTest</code>.</p>
+
+<h3>El reinicio es real: <code>ReinicioServicioHttpTest</code></h3>
+<p>Crea enlaces, <strong>cierra el contexto de Spring</strong>, adelanta el reloj y levanta otro contexto contra
+<em>el mismo</em> contenedor PostgreSQL. Comprueba que el tiempo apagado contó (Q10) y que el generador siguió desde
+donde estaba.</p>
+
+<h3>La concurrencia se fuerza: <code>ConcurrenciaHttpTest</code></h3>
+<p>Varios hilos esperan en un <code>CountDownLatch</code> («largada») y salen todos juntos, para maximizar la
+carrera. Se verifica que el único vencido lo gane una sola creación, que un rechazo no deje nada a medias y que la
+resolución nunca mezcle asignaciones.</p>
+
+<h2>3. Evidencia más allá de los tests</h2>
+
+<div class="tabla-scroll"><table>
+<tr><th>Evidencia</th><th>Qué muestra</th><th>Origen</th></tr>
+<tr><td><code>scripts/capacidad</code> → <code>evidencia-capacidad.md</code></td><td>1000 asignaciones vigentes y 10 clientes. Creación p95 = 113 ms, resolución p95 = 7,5 ms. 100 % ≤ 1 s, 0 errores, medido por la IP de la LAN y sin seguir el redirect.</td><td><span class="tag q">Q13 Q26</span></td></tr>
+<tr><td><code>EvolucionDuracionHttpTest</code> → <code>evidencia-evolucion.md</code></td><td>Cambiar la duración de 60 a 5 min costó <strong>cero líneas</strong> de Java: lo creado antes conserva su vencimiento.</td><td><span class="tag c">C</span> Cliente Incierto</td></tr>
+<tr><td><code>scripts/demo</code> + <code>evidencia-demo/manual</code></td><td>Recorrido completo y capturas: web, Chrome, Firefox, QR escaneado desde el celular, errores y 404.</td><td><span class="tag q">Q24</span></td></tr>
+</table></div>
+
+<p class="nota">La evidencia manual de la demo física (issue 12) está en tus commits <em>locales</em> y todavía no está en GitHub.</p>
+
+<hr>
+
+<h2>4. Practicá: requisito → prueba</h2>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">«A los 60 minutos exactos deja de redirigir.» ¿Qué lo prueba por HTTP?</p>
+  <div class="opciones">
+    <button data-op="a">ExpirationPolicyTest</button>
+    <button data-op="b">VencimientoHttpTest</button>
+    <button data-op="c">ConcurrenciaHttpTest</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Ese prueba el <em>cálculo</em> (+60 min) en el dominio, no la redirección.</p>
+  <p class="devolucion" data-op="b" hidden>✔ <code>antesDelVencimientoRedirigeYAlAlcanzarloDejaDeResolver</code>, con <code>MutableClock</code>.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Ese prueba carreras entre creaciones.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Por qué los tests HTTP usan PostgreSQL real y no una base en memoria?</p>
+  <div class="opciones">
+    <button data-op="a">Los candados dependen del motor real</button>
+    <button data-op="b">Las bases en memoria no soportan JPA</button>
+    <button data-op="c">Testcontainers es más rápido que H2</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ <code>FOR UPDATE</code>, el aislamiento, <code>TIMESTAMPTZ</code> y las FK compuestas: lo que se prueba es el comportamiento <em>de PostgreSQL</em> (ADR 0004).</p>
+  <p class="devolucion" data-op="b" hidden>✘ H2 y HSQLDB soportan JPA; el problema es que no se comportan igual que PostgreSQL.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Es más lento: arranca un contenedor Docker. Se paga a propósito.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="c">
+  <p class="pregunta">¿Cómo se prueba que el tiempo apagado cuenta?</p>
+  <div class="opciones">
+    <button data-op="a">Apagando el servidor una hora</button>
+    <button data-op="b">Con un endpoint que mueve el reloj</button>
+    <button data-op="c">Dos contextos sobre la misma base</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Nadie espera una hora: el reloj se adelanta.</p>
+  <p class="devolucion" data-op="b" hidden>✘ A propósito, no existe ningún endpoint de reloj.</p>
+  <p class="devolucion" data-op="c" hidden>✔ <code>ReinicioServicioHttpTest</code>: cierra Spring, adelanta el <code>MutableClock</code> y levanta otro contexto contra el mismo contenedor.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">¿Qué demuestra <code>EvolucionDuracionHttpTest</code> sobre la arquitectura?</p>
+  <div class="opciones">
+    <button data-op="a">Que el sistema escala a mil usuarios</button>
+    <button data-op="b">Que un cambio previsto no toca código</button>
+    <button data-op="c">Que la API cumple con su contrato</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Eso es la prueba de capacidad.</p>
+  <p class="devolucion" data-op="b" hidden>✔ Otra duración = una propiedad de configuración. Lo ya creado no se recalcula, porque <code>vence_en</code> está guardado. Es la respuesta a la regla del «Cliente Incierto».</p>
+  <p class="devolucion" data-op="c" hidden>✘ Eso lo cubren <code>LinkApiHttpTest</code> y <code>DestinationValidationHttpTest</code>.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Qué prueba que el QR descargado contiene el enlace correcto?</p>
+  <div class="opciones">
+    <button data-op="a">qr-code.test.mjs decodificándolo</button>
+    <button data-op="b">LinkApiHttpTest con el backend</button>
+    <button data-op="c">Solo la demo con celular</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Genera el PNG con <code>QrPng</code> y lo lee con UPNG + jsQR, que son independientes: el texto tiene que ser exactamente el <code>shortUrl</code>.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Ese solo verifica que la web sirva los archivos del QR.</p>
+  <p class="devolucion" data-op="c" hidden>✘ La demo lo confirma en la práctica, pero hay un test automático.</p>
+</section>
+
+<p class="marcador" data-quiz-marcador></p>
+
+<section class="ejercicio oral" data-segundos="90">
+  <p class="pregunta">En voz alta: «¿Cómo saben que funciona?»</p>
+  <details class="modelo">
+    <summary>Respuesta modelo</summary>
+    <p>«En tres niveles. Las reglas del dominio tienen tests unitarios puros: alfabeto, secuencia, reciclaje,
+    vencimiento y validación. Los casos de uso se prueban con implementaciones en memoria de los puertos. Lo que
+    depende de la base (transacciones, candado, reinicio, contrato HTTP) se prueba por HTTP contra PostgreSQL real
+    con Testcontainers, y controlamos el reloj para probar el límite exacto de 60 minutos sin esperar. Forzamos
+    carreras con hilos para la concurrencia. Aparte medimos capacidad, con 10 clientes y 1000 enlaces, p95 muy por
+    debajo de un segundo; hicimos la demo física con el celular escaneando el QR, y un experimento de evolución que
+    muestra que cambiar la duración no requiere tocar código.»</p>
+  </details>
+</section>
+
+<hr>
+
+<h2>Para leer</h2>
+<p><strong>Fuente primaria:</strong> Ham Vocke en el sitio de Martin Fowler,
+<a href="https://martinfowler.com/articles/practical-test-pyramid.html">«The Practical Test Pyramid»</a>. Leé hasta
+«Integration Tests». Después abrí
+<a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/src/test/java/io/github/spendice/linkshortener/VencimientoHttpTest.java"><code>VencimientoHttpTest</code></a>:
+es corto y muestra el <code>MutableClock</code> en acción.</p>
+
+<p>← <a href="0005-clientes-web-extensiones-qr.html">Lección 5</a> ·
+<a href="../reference/mapa-del-codigo.html">Mapa del código</a> ·
+<a href="0007-trazabilidad-y-simulacro.html">Lección 7: trazabilidad y simulacro</a> →</p>
+
+<p class="victoria">¿Dudas? Preguntame, por ejemplo: «leamos juntos <code>ConcurrenciaHttpTest</code>» o
+«¿cómo corro los tests antes del martes?».</p>
+
+</main>
+<script src="../assets/quiz.js"></script>
+<script src="../assets/oral.js"></script>
+</body>
+</html>

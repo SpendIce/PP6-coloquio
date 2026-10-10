@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lección 2 · Alias y vencimiento</title>
+<link rel="stylesheet" href="../assets/curso.css">
+</head>
+<body>
+<main>
+
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 2 de 7 · ~15 minutos</p>
+<h1>Alias: secuencia, reciclaje y vencimiento</h1>
+<p class="subtitulo">Qué código recibe la próxima creación, y por qué ese y no otro.</p>
+
+<div class="victoria">
+  <strong>Al terminar vas a poder:</strong> mirar el estado de la base (qué alias existen y cuáles
+  vencieron) y predecir qué alias recibe la próxima creación, justificándolo con la consigna.
+</div>
+
+<h2>0. Repaso de la lección 1</h2>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">¿Qué capa construye <code>ExpirationPolicy</code> con la duración configurada?</p>
+  <div class="opciones">
+    <button data-op="a">Dominio</button>
+    <button data-op="b">Infraestructura</button>
+    <button data-op="c">Aplicación</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ La clase <em>es</em> de dominio, pero no se construye sola: no lee el <code>application.yml</code>.</p>
+  <p class="devolucion" data-op="b" hidden>✔ <code>DomainConfig</code> (infraestructura) lee <code>ShortenerProperties.linkDuration</code> y crea la política.</p>
+  <p class="devolucion" data-op="c" hidden>✘ <code>CreateLink</code> la recibe ya armada por constructor.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Qué pasa en <code>ResolveLink</code> si el código tiene una <code>l</code> minúscula?</p>
+  <div class="opciones">
+    <button data-op="a">Devuelve vacío sin consultar</button>
+    <button data-op="b">Consulta igual la base</button>
+    <button data-op="c">Lanza una excepción propia</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ <code>AliasAlphabet.isCode</code> falla y corta antes de ir a la base: la <code>l</code> no está en el alfabeto.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Sería una consulta inútil: ningún alias puede tener una <code>l</code>.</p>
+  <p class="devolucion" data-op="c" hidden>✘ No hay excepción: devuelve <code>Optional.empty()</code>, y el controlador responde 404.</p>
+</section>
+
+<h2>1. El alfabeto <span class="tag c">C</span> <span class="tag q">Q20</span></h2>
+
+<p>La consigna pide un alias «tan corto y memorizable como sea posible». <a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/src/main/java/io/github/spendice/linkshortener/domain/AliasAlphabet.java"><code>AliasAlphabet</code></a> lo resuelve con dos decisiones:</p>
+
+<pre><code>123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz   → 58 símbolos</code></pre>
+
+<ul>
+  <li><strong>Sin <code>0 O I l</code></strong>: son los caracteres que se confunden al leerlos en voz alta o
+  en un papel («¿eso es un cero o una o?»). Eso es lo <em>memorizable</em>.</li>
+  <li><strong>Distingue mayúsculas</strong>: <code>A</code> y <code>a</code> son códigos distintos. Hay más códigos
+  por longitud, y por lo tanto códigos más <em>cortos</em>.</li>
+</ul>
+
+<h2>2. Códigos nuevos: la secuencia <span class="tag q">Q20</span></h2>
+
+<p><a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/src/main/java/io/github/spendice/linkshortener/domain/AliasSequence.java"><code>AliasSequence.codeAt(índice)</code></a>
+convierte un número en un código. Se agotan todos los de un carácter antes de pasar a dos:</p>
+
+<pre><code>índice  0 → "1"        índice 57 → "z"        (58 códigos de 1 carácter)
+índice 58 → "11"       índice 59 → "12"  …    (58² = 3364 de 2 caracteres)
+índice 3422 → "111"                           (recién ahí aparecen los de 3)</code></pre>
+
+<p>El próximo índice se guarda en la tabla <code>generador_alias</code> (una sola fila,
+<code>proximo_indice</code>). Por eso, después de un reinicio, la secuencia sigue donde estaba sin
+tener que recalcular nada.</p>
+
+<p><strong>Rutas reservadas:</strong> <code>api</code> y <code>error</code> son códigos válidos del
+alfabeto, pero también son rutas de la aplicación (<code>/api/links</code>, y <code>/error</code> de Spring).
+<code>indexOfNextCode</code> los saltea y nunca los emite. Vienen de
+<code>shortener.reserved-routes</code> <span class="tag t">T</span>.</p>
+
+<h2>3. Vencimiento <span class="tag c">C</span></h2>
+
+<pre><code>al crear:    vence_en = creada_en + 60 min     ExpirationPolicy, UNA vez, y se guarda
+al resolver: vigente  ⇔ ahora &lt; vence_en       Assignment.isActiveAt</code></pre>
+
+<p>Hay tres consecuencias que te conviene saber de memoria:</p>
+<ul>
+  <li><strong>Límite exacto:</strong> a las 11:00:00 de un enlace creado a las 10:00:00 ya no redirige,
+  porque es <code>isBefore</code> y no «menor o igual». El test es <code>AssignmentTest.dejaDeResolverExactamenteAlVencer</code>.</li>
+  <li><strong>El tiempo apagado cuenta</strong> <span class="tag q">Q10</span>: <code>vence_en</code> es un instante absoluto
+  (<code>TIMESTAMPTZ</code>), no un contador que corre mientras el servidor está prendido.</li>
+  <li><strong>Visitar no renueva</strong>: resolver es solo lectura.</li>
+</ul>
+
+<h2>4. Reciclaje <span class="tag c">C</span> <span class="tag q">Q19</span></h2>
+
+<p>La consigna dice: «luego dejará de redireccionar, quedará disponible y podrá ser reasignada». En cada creación:</p>
+
+<pre><code>1. Candidatos = alias cuya asignación ACTUAL tiene vence_en ≤ ahora
+2. ¿Hay candidatos?  → AliasRecycling: el más corto; si empatan, orden natural ("A" &lt; "a")
+3. ¿No hay?          → AliasSequence: el próximo código nunca usado</code></pre>
+
+<p>Hay un detalle lindo para el coloquio: <strong>reciclar nunca da un código más largo que uno nuevo</strong>.
+La secuencia solo avanza, así que el próximo código nuevo es al menos tan largo como cualquier alias que
+ya exista.</p>
+
+<h2>5. Alias ≠ asignación <span class="tag t">ADR 0002</span> <span class="tag t">ADR 0003</span></h2>
+
+<pre><code>alias "7"  ──actual──▶  asignación #12  (destino B, vence 15:00)   ← vigente
+               (antes)  asignación #3   (destino A, vencida)       ← historial, NO se borra</code></pre>
+
+<p>Reciclar no pisa la asignación vieja: <strong>agrega</strong> una nueva y mueve la flecha
+<code>asignacion_actual_id</code>. El alias es la dirección pública; la asignación es "quién vivió ahí y
+cuándo". La consecuencia, aceptada en Q1/Q19, es que un QR viejo con el alias <code>7</code> ahora lleva al
+destino B. Por eso la respuesta incluye el <code>reuseNotice</code>.</p>
+
+<hr>
+
+<h2>6. Practicá</h2>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">Base vacía. ¿Qué alias recibe la primera creación?</p>
+  <div class="opciones">
+    <button data-op="a">"1"</button>
+    <button data-op="b">"A"</button>
+    <button data-op="c">"a"</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Índice 0 = primer símbolo del alfabeto, que empieza en <code>1</code> porque no hay <code>0</code>.</p>
+  <p class="devolucion" data-op="b" hidden>✘ <code>A</code> es el índice 9: antes vienen los dígitos <code>1</code>–<code>9</code>.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Las minúsculas van al final del alfabeto.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">Se emitieron los 58 de un carácter y ninguno venció. ¿Qué sale ahora?</p>
+  <div class="opciones">
+    <button data-op="a">"1A"</button>
+    <button data-op="b">"11"</button>
+    <button data-op="c">"zz"</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ <code>1A</code> viene después: la segunda posición también recorre el alfabeto desde <code>1</code>.</p>
+  <p class="devolucion" data-op="b" hidden>✔ Índice 58: primer código de dos caracteres.</p>
+  <p class="devolucion" data-op="c" hidden>✘ <code>zz</code> es el último de dos caracteres (índice 3421).</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="c">
+  <p class="pregunta">Vencidos: <code>x7</code> y <code>3</code>. Vigente: <code>B</code>. El próximo nuevo sería <code>12</code>. ¿Qué sale?</p>
+  <div class="opciones">
+    <button data-op="a">"x7"</button>
+    <button data-op="b">"12"</button>
+    <button data-op="c">"3"</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Es candidato, pero hay uno más corto.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Mientras haya vencidos, se recicla antes de generar uno nuevo.</p>
+  <p class="devolucion" data-op="c" hidden>✔ Hay vencidos, así que se recicla, y entre ellos gana el más corto.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">Vencidos: <code>aZ</code> y <code>Az</code>. ¿Cuál se recicla?</p>
+  <div class="opciones">
+    <button data-op="a">"aZ"</button>
+    <button data-op="b">"Az"</button>
+    <button data-op="c">Ninguno</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ En el orden natural de Java las mayúsculas (65–90) van antes que las minúsculas (97–122).</p>
+  <p class="devolucion" data-op="b" hidden>✔ Misma longitud, así que desempata el orden natural: <code>A</code> &lt; <code>a</code>. El desempate es determinista, y el test es <code>elDesempateDistingueMayusculasDeMinusculas</code>.</p>
+  <p class="devolucion" data-op="c" hidden>✘ El empate está previsto: el ADR 0002 lo dejó «a criterio de implementación» y se eligió el orden natural.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">Creado 10:00. Servidor apagado de 10:30 a 11:30. GET a las 11:31:</p>
+  <div class="opciones">
+    <button data-op="a">302</button>
+    <button data-op="b">404</button>
+    <button data-op="c">410</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Eso sería si el tiempo apagado no contara. Q10 acordó que cuenta.</p>
+  <p class="devolucion" data-op="b" hidden>✔ <code>vence_en</code> = 11:00, guardado como instante absoluto, y 11:31 ya pasó. Lo prueba <code>ReinicioServicioHttpTest</code>.</p>
+  <p class="devolucion" data-op="c" hidden>✘ 410 Gone significa «no vuelve nunca», y el alias se va a reutilizar. Se acordó 404 (Q11).</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">Al reciclar el alias <code>7</code>, ¿qué pasa con su asignación anterior?</p>
+  <div class="opciones">
+    <button data-op="a">Queda guardada en el historial</button>
+    <button data-op="b">Se actualiza con el destino</button>
+    <button data-op="c">Se borra de la tabla</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ ADR 0003: se conserva por si las etapas 2 y 3 la necesitan (consola, estadísticas). Solo se mueve <code>asignacion_actual_id</code>.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Pisarla perdería información irrecuperable. Cada creación es una asignación nueva (Q2).</p>
+  <p class="devolucion" data-op="c" hidden>✘ No hay purga: el ADR 0003 eligió conservar el historial.</p>
+</section>
+
+<p class="marcador" data-quiz-marcador></p>
+
+<section class="ejercicio ordenar">
+  <p class="pregunta">Ordená lo que hace <code>JpaAliasStore.claim</code>:</p>
+  <ul class="ordenar-lista">
+    <li data-paso="1">Bloquear la fila de <code>generador_alias</code></li>
+    <li data-paso="2">Buscar alias cuya asignación actual venció</li>
+    <li data-paso="3">Pedirle a <code>AliasRecycling</code> el mejor candidato</li>
+    <li data-paso="4">Si no hay: calcular el próximo código con <code>AliasSequence</code></li>
+    <li data-paso="5">Avanzar <code>proximo_indice</code> e insertar el alias nuevo</li>
+  </ul>
+  <button data-comprobar>Comprobar</button>
+  <p class="devolucion" data-si-ok hidden>✔ Fijate en el reparto: <em>qué</em> alias conviene lo decide el dominio (<code>AliasRecycling</code>,
+  <code>AliasSequence</code>) y <em>cómo</em> reservarlo sin pisarse lo decide el adaptador (el bloqueo). Por qué hace
+  falta ese bloqueo lo vemos en la lección 3.</p>
+</section>
+
+<section class="ejercicio oral" data-segundos="60">
+  <p class="pregunta">En voz alta: «¿Por qué el alias no es la identidad de la asignación? ¿Qué ganaron y qué aceptaron?»</p>
+  <details class="modelo">
+    <summary>Respuesta modelo</summary>
+    <p>«Porque la consigna pide que el alias vencido pueda reasignarse. Si el alias fuera la identidad, reasignarlo
+    pisaría el enlace anterior. Separamos <em>alias</em>, que es la dirección pública reutilizable, de
+    <em>asignación</em>, que es cada uso con su destino, su creación y su vencimiento, con id propio. Ganamos
+    historial completo para las etapas 2 y 3 y alias cortos reciclados. Aceptamos, y lo acordamos así, que un enlace
+    o QR viejo lleve al destino nuevo; por eso avisamos con <code>reuseNotice</code>. También aceptamos que la tabla
+    de asignaciones crezca aunque los alias se reciclen.»</p>
+  </details>
+</section>
+
+<hr>
+
+<h2>Para leer</h2>
+<p><strong>Fuente primaria:</strong> el
+<a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/docs/adr/0002-alias-reutilizable.md">ADR 0002</a>
+y el <a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/CONTEXT.md">glosario <code>CONTEXT.md</code></a>.
+Son cortos y son <em>tus</em> decisiones: en el coloquio usá esas mismas palabras (alias, asignación, vencimiento,
+reasignación).</p>
+
+<p>← <a href="0001-el-mapa-capas-y-recorridos.html">Lección 1</a> ·
+<a href="../reference/mapa-del-codigo.html">Mapa del código</a> ·
+<a href="0003-persistencia-y-concurrencia.html">Lección 3: persistencia y concurrencia</a> →</p>
+
+<p class="victoria">¿Dudas? Preguntame en la terminal, por ejemplo: «hacé a mano <code>codeAt(100)</code> conmigo»
+o «¿qué pasa si se llenan los 3364 de dos?».</p>
+
+</main>
+<script src="../assets/quiz.js"></script>
+<script src="../assets/ordenar.js"></script>
+<script src="../assets/oral.js"></script>
+</body>
+</html>

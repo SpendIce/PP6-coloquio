@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lección 1 · El mapa del acortador</title>
+<link rel="stylesheet" href="../assets/curso.css">
+</head>
+<body>
+<main>
+
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 1 de 7 · ~15 minutos</p>
+<h1>El mapa: tres capas y dos recorridos</h1>
+<p class="subtitulo">Antes de explicar cualquier clase, tenés que saber en qué piso del edificio está.</p>
+
+<div class="victoria">
+  <strong>Al terminar vas a poder:</strong> recorrer en voz alta un <code>POST /api/links</code> y un
+  <code>GET /{alias}</code>, nombrando cada clase y en qué capa vive.
+</div>
+
+<h2>1. El edificio</h2>
+
+<p class="analogia">Una casa tiene estructura, ambientes e instalaciones. Podés cambiar la caldera
+sin tirar una pared, pero no podés mover una columna sin que se entere todo el edificio.</p>
+
+<p>El código del TP está separado igual, en tres paquetes bajo
+<code>io.github.spendice.linkshortener</code>. Esta separación es una decisión de ustedes,
+registrada en el <a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/docs/adr/0001-monolito-modular.md">ADR 0001</a> <span class="tag t">T</span>,
+y es la forma de cumplir lo que pide la consigna: «arquitectura de capas, bajo acoplamiento, alta
+cohesión» <span class="tag c">C</span>.</p>
+
+<div class="capas" role="img" aria-label="Tres capas anidadas: infraestructura contiene a aplicación, que contiene a dominio">
+  <div class="capa infra">
+    <span class="nombre">infrastructure/ — las instalaciones</span>
+    <span class="clases">http/ LinkApiController, RedirectController, ApiExceptionHandler, dto/ · persistence/ entidades JPA, JpaAliasStore, JpaAssignmentStore · config/ DomainConfig, ShortenerProperties</span>
+    <div class="capa">
+      <span class="nombre">application/ — los ambientes (casos de uso)</span>
+      <span class="clases">CreateLink, ResolveLink · port/ AliasStore, AssignmentStore (interfaces)</span>
+      <div class="capa">
+        <span class="nombre">domain/ — la estructura (reglas)</span>
+        <span class="clases">Assignment, Alias, ExpirationPolicy, DestinationValidator, AliasAlphabet, AliasSequence, AliasRecycling, ServiceOrigin</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p><strong>La regla de oro:</strong> las dependencias apuntan <em>hacia adentro</em>. Infraestructura
+conoce a aplicación y a dominio; aplicación conoce solo a dominio; dominio no conoce a nadie.
+Lo podés probar: ningún archivo de <code>domain/</code> importa algo de Spring, solo <code>java.*</code>.</p>
+
+<p>¿Y cómo hace <code>CreateLink</code> para guardar en la base si no conoce JPA? Declara lo que
+necesita en una <strong>interfaz</strong> (<code>AliasStore</code>, <code>AssignmentStore</code>) y
+la infraestructura la implementa (<code>JpaAliasStore</code>). Esa interfaz es un
+<strong>puerto</strong>, y la implementación es un <strong>adaptador</strong>. El nombre del patrón
+es <em>Ports &amp; Adapters</em>, o arquitectura hexagonal
+(<a href="https://alistair.cockburn.us/hexagonal-architecture/">Cockburn</a>).</p>
+
+<p>El que conecta todo es <code>DomainConfig</code>. Crea los objetos del dominio con la
+configuración del <code>application.yml</code> (duración, URL pública, rutas reservadas) y se los
+pasa a los casos de uso. Es el electricista: el único que ve todos los cables.</p>
+
+<h2>2. Recorrido de creación</h2>
+
+<p>El usuario toca <em>Acortar</em> en la web o abre el popup de la extensión. Los dos mandan el mismo
+<code>POST /api/links {"destination": "https://…"}</code>.</p>
+
+<pre><code>LinkApiController.create                 infra   Jackson ya convirtió el JSON en CreateLinkRequest
+  CreateLink.create  @Transactional      app     una sola transacción para todo lo que sigue
+    DestinationValidator.validate        dom     ¿http/https? ¿≤ 8192? ¿no es el propio acortador?
+    clock.instant()                      —       "ahora", inyectado para poder testear el tiempo
+    AliasStore.claim(ahora)              puerto  → JpaAliasStore: recicla un vencido o genera uno nuevo
+    ExpirationPolicy.expiresAt(ahora)    dom     ahora + 60 min, se calcula UNA vez
+    AssignmentStore.save(asignación)     puerto  → JpaAssignmentStore: INSERT en asignacion
+    AliasStore.assignCurrent(alias, id)  puerto  el alias ahora apunta a esta asignación
+  ← CreatedLink(alias, destino, creada, vence)
+← 201 Created {shortUrl, alias, expiresAt, reuseNotice}   Cache-Control: no-store</code></pre>
+
+<p>El <code>shortUrl</code> lo arma el <em>controlador</em> (<code>PUBLIC_BASE_URL + "/" + alias</code>), no
+el caso de uso, porque "en qué host corro" es un detalle de HTTP. Si la URL es inválida,
+<code>DestinationValidator</code> lanza <code>InvalidDestinationException</code> y
+<code>ApiExceptionHandler</code> la convierte en <code>400 {error, message}</code>.</p>
+
+<h2>3. Recorrido de resolución</h2>
+
+<p>Alguien abre <code>http://192.168.x.y:8080/xT3</code> o escanea el QR, que contiene esa misma URL.</p>
+
+<pre><code>RedirectController.resolve               infra   solo entra si el path calza con el alfabeto de alias
+  ResolveLink.resolve  @Transactional(readOnly)  app
+    AliasAlphabet.isCode(código)         dom     si no es un código válido → vacío, sin ir a la base
+    AliasStore.findByCode                puerto  ¿existe el alias? ¿a qué asignación apunta?
+    AssignmentStore.findById             puerto  trae esa asignación
+    Assignment.isActiveAt(ahora)         dom     ahora &lt; vence_en ?
+← 302 Found  Location: destino           si está vigente
+← 404 "Este enlace no existe o venció"   si no existe o venció</code></pre>
+
+<p>Fijate en el detalle: al resolver <strong>nadie recalcula</strong> el vencimiento. Se compara contra
+el <code>vence_en</code> guardado. Por eso el tiempo con el servidor apagado también cuenta, y por eso
+cambiar la duración solo afecta a los enlaces nuevos.</p>
+
+<hr>
+
+<h2>4. Practicá (sin volver a mirar arriba)</h2>
+
+<p class="nota">El esfuerzo de recordar es lo que fija el conocimiento. Si dudás, arriesgá igual:
+equivocarte acá es gratis.</p>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿En qué capa vive <code>DestinationValidator</code>?</p>
+  <div class="opciones">
+    <button data-op="a">Dominio</button>
+    <button data-op="b">Aplicación</button>
+    <button data-op="c">Infraestructura</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Es una regla del negocio pura: importa solo <code>java.net</code> y <code>java.util</code>, no sabe que existe HTTP.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Aplicación la <em>usa</em> (<code>CreateLink</code> la llama), pero la regla vive en <code>domain/</code>.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Infraestructura solo la <em>construye</em> en <code>DomainConfig</code>, con los orígenes configurados.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="c">
+  <p class="pregunta">¿Qué capa conoce a las otras dos?</p>
+  <div class="opciones">
+    <button data-op="a">Dominio</button>
+    <button data-op="b">Aplicación</button>
+    <button data-op="c">Infraestructura</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ El dominio es el núcleo: no importa nada fuera de <code>domain/</code>.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Conoce al dominio y a sus propios puertos, pero no a quién los implementa.</p>
+  <p class="devolucion" data-op="c" hidden>✔ <code>DomainConfig</code> importa casos de uso, puertos y dominio para cablearlos. Las dependencias apuntan hacia adentro.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Por qué <code>CreateLinkTest</code> puede correr sin PostgreSQL?</p>
+  <div class="opciones">
+    <button data-op="a">Usa implementaciones en memoria de los puertos</button>
+    <button data-op="b">Spring levanta una base embebida en memoria</button>
+    <button data-op="c">Mockea las entidades JPA con una biblioteca</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ <code>InMemoryStores</code> implementa <code>AliasStore</code> y <code>AssignmentStore</code>. Como <code>CreateLink</code> depende de interfaces, le pasás otra implementación. Este es EL argumento de testeabilidad.</p>
+  <p class="devolucion" data-op="b" hidden>✘ No hay base embebida: el ADR 0004 eligió PostgreSQL también para los tests. Los tests HTTP usan Postgres real con Testcontainers.</p>
+  <p class="devolucion" data-op="c" hidden>✘ <code>CreateLink</code> ni siquiera conoce las entidades JPA; esas viven en <code>infrastructure/persistence</code>.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Dónde se arma el <code>shortUrl</code> (<code>http://host/alias</code>)?</p>
+  <div class="opciones">
+    <button data-op="a">LinkApiController</button>
+    <button data-op="b">CreateLink</button>
+    <button data-op="c">JpaAliasStore</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Concatena <code>PUBLIC_BASE_URL</code> + <code>/</code> + alias. La URL pública es un detalle del adaptador HTTP.</p>
+  <p class="devolucion" data-op="b" hidden>✘ <code>CreateLink</code> devuelve <code>CreatedLink</code> con el alias, sin URL: no sabe en qué host corre.</p>
+  <p class="devolucion" data-op="c" hidden>✘ <code>JpaAliasStore</code> solo reserva el código en la base.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">Llega <code>GET /abc</code>, creado hace 61 minutos. ¿Quién decide que no redirige?</p>
+  <div class="opciones">
+    <button data-op="a">Assignment.isActiveAt</button>
+    <button data-op="b">ExpirationPolicy.expiresAt</button>
+    <button data-op="c">RedirectController.resolve</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Compara el instante actual con el <code>vence_en</code> guardado.</p>
+  <p class="devolucion" data-op="b" hidden>✘ La política se aplica una sola vez, al <em>crear</em>. Al resolver se lee el vencimiento guardado; por eso cambiar la duración no toca los enlaces ya creados.</p>
+  <p class="devolucion" data-op="c" hidden>✘ El controlador solo traduce el <code>Optional</code> vacío en un 404. La decisión ya la tomó el dominio.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Para qué existe <code>application/port/</code>?</p>
+  <div class="opciones">
+    <button data-op="a">Para que los casos ignoren JPA</button>
+    <button data-op="b">Spring exige interfaces para inyectar beans</button>
+    <button data-op="c">Para compartir código con las extensiones</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Es el «puerto» de Cockburn: <code>CreateLink</code> declara qué necesita y <code>JpaAliasStore</code> lo provee. Cambiar de base toca un adaptador, no el caso de uso.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Spring inyecta clases concretas sin problema. El ADR 0001 dice: interfaces «en puntos de variabilidad reales», no por obligación.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Las extensiones son JavaScript y hablan con la API por HTTP; nunca tocan Java.</p>
+</section>
+
+<p class="marcador" data-quiz-marcador></p>
+
+<section class="ejercicio ordenar">
+  <p class="pregunta">Ordená lo que hace <code>CreateLink.create</code>:</p>
+  <ul class="ordenar-lista">
+    <li data-paso="1">Validar la URL de destino</li>
+    <li data-paso="2">Tomar el instante actual del reloj</li>
+    <li data-paso="3">Reservar un alias (reciclado o nuevo)</li>
+    <li data-paso="4">Guardar la asignación con su vencimiento</li>
+    <li data-paso="5">Apuntar el alias a la nueva asignación</li>
+    <li data-paso="6">Devolver el resultado al controlador</li>
+  </ul>
+  <button data-comprobar>Comprobar</button>
+  <p class="devolucion" data-si-ok hidden>✔ Exacto. Todo corre en <strong>una</strong> transacción: si falla el paso 4, la reserva del 3 se deshace.
+  Pregunta probable: <em>¿por qué validar primero?</em> Para no tomar el lock del generador de alias ni tocar la base con una entrada que igual se va a rechazar.</p>
+</section>
+
+<section class="ejercicio oral" data-segundos="90">
+  <p class="pregunta">En voz alta, sin mirar: «¿Qué pasa desde que el usuario toca ACORTAR hasta que ve el enlace?»
+  Nombrá cada clase y su capa. Si podés, grabate con el celular.</p>
+  <details class="modelo">
+    <summary>Respuesta modelo (comparala con la tuya)</summary>
+    <p>«La web hace un POST a <code>/api/links</code> con el destino. <code>LinkApiController</code>, en
+    infraestructura, recibe el DTO y llama al caso de uso <code>CreateLink</code>, en aplicación. Dentro
+    de una transacción, <code>CreateLink</code> valida la URL con <code>DestinationValidator</code>, que es dominio,
+    reserva un alias a través del puerto <code>AliasStore</code>, calcula el vencimiento con
+    <code>ExpirationPolicy</code> y guarda la asignación por el puerto <code>AssignmentStore</code>. Los
+    puertos los implementan los adaptadores JPA. El controlador arma el <code>shortUrl</code> con la URL
+    pública configurada y responde 201 con el enlace, el vencimiento y el aviso de reutilización. El
+    QR lo genera el navegador a partir de ese <code>shortUrl</code>.»</p>
+    <p class="nota">Chequeá: ¿dijiste las tres capas? ¿Mencionaste la transacción? ¿Dijiste que el QR
+    codifica el enlace corto y no el destino?</p>
+  </details>
+</section>
+
+<hr>
+
+<h2>Para leer</h2>
+<p><strong>Fuente primaria:</strong> Alistair Cockburn,
+<a href="https://alistair.cockburn.us/hexagonal-architecture/">«Hexagonal (Ports &amp; Adapters) Architecture»</a>.
+Es el texto original del patrón que usa <code>application/port</code>. Con la primera mitad alcanza.
+Después releé el <a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/docs/adr/0001-monolito-modular.md">ADR 0001</a>: ahora
+vas a reconocer cada frase en el código.</p>
+
+<p>Referencia para repasar: <a href="../reference/mapa-del-codigo.html">Mapa del código</a> (todas las
+clases, su capa y su origen).<br>
+Próxima: <a href="0002-alias-secuencia-reciclaje-vencimiento.html">Lección 2 — Alias: secuencia, reciclaje y vencimiento</a> →</p>
+
+<p class="victoria">¿Algo no cerró? Preguntame lo que sea en la terminal: «¿por qué
+<code>assignCurrent</code> va después de <code>save</code>?», «mostrame <code>JpaAliasStore</code>»… Soy tu
+docente para esto, y las dudas de hoy son las preguntas del profe del martes.</p>
+
+</main>
+<script src="../assets/quiz.js"></script>
+<script src="../assets/ordenar.js"></script>
+<script src="../assets/oral.js"></script>
+</body>
+</html>

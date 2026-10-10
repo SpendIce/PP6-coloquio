@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lección 4 · HTTP y contrato</title>
+<link rel="stylesheet" href="../assets/curso.css">
+</head>
+<body>
+<main>
+
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 4 de 7 · ~15 minutos</p>
+<h1>HTTP y contrato</h1>
+<p class="subtitulo">Cada código de estado y cada header tiene un porqué. Si lo sabés, «buenas prácticas REST» deja de ser una frase.</p>
+
+<div class="victoria">
+  <strong>Al terminar vas a poder:</strong> defender cada código de estado y cada header de la API
+  citando la norma (RFC 9110) o un acuerdo con el profe.
+</div>
+
+<h2>0. Repaso de la lección 3</h2>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">¿Qué serializa el <code>SELECT … FOR UPDATE</code> sobre <code>generador_alias</code>?</p>
+  <div class="opciones">
+    <button data-op="a">Solo el avance del contador</button>
+    <button data-op="b">Toda la selección del alias</button>
+    <button data-op="c">Todas las lecturas y escrituras</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Si fuera solo el contador, dos pedidos podrían reciclar el mismo vencido.</p>
+  <p class="devolucion" data-op="b" hidden>✔ Reciclar o generar, y además asignar, hasta el commit.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Las resoluciones (<code>readOnly</code>) no toman el candado.</p>
+</section>
+
+<h2>1. Contrato primero <span class="tag c">C</span></h2>
+
+<p>La consigna (§3.2) pide definir «contratos de la API REST (OpenAPI/Swagger) … antes de la generación de código».
+Eso es <a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/openapi.yaml"><code>openapi.yaml</code></a>: se escribió
+antes del código, y el código lo cumple. Si te piden «el Swagger», es ese archivo. No hay Swagger UI levantada
+(no está <code>springdoc</code>), pero el YAML se puede pegar en <a href="https://editor.swagger.io/">editor.swagger.io</a>
+para verlo.</p>
+
+<h2>2. Crear: <code>POST /api/links</code></h2>
+
+<pre><code>POST /api/links            {"destination": "https://…"}
+← 201 Created              {shortUrl, alias, expiresAt, reuseNotice}   Cache-Control: no-store
+← 400 Bad Request          {error: "OWN_ORIGIN", message: "La URL … pertenece al propio acortador."}</code></pre>
+
+<ul>
+  <li><strong>POST + sustantivo</strong> (<code>/api/links</code>): crear un recurso en una colección.</li>
+  <li><strong>201 y no 200</strong>: la norma dice que 201 significa «se crearon uno o más recursos nuevos»
+  (<a href="https://www.rfc-editor.org/rfc/rfc9110.html#name-201-created">RFC 9110 §15.3.2</a>), y acá se creó una asignación.
+  <em>Detalle que te pueden marcar:</em> no se manda header <code>Location</code>. La norma lo permite (sin
+  <code>Location</code>, el recurso es la URI pedida), y el enlace creado viaja en <code>shortUrl</code>.</li>
+  <li><strong>POST no es idempotente</strong>: repetirlo crea <em>otra</em> asignación, y eso es lo acordado (Q2, Q21).</li>
+  <li><strong>400 con <code>{error, message}</code></strong>: <code>error</code> es un código estable que lee una
+  máquina (la extensión lo muestra), y <code>message</code> es para la persona (la web lo muestra tal cual). Los
+  códigos posibles están enumerados en el contrato: <code>EMPTY_DESTINATION</code>, <code>DESTINATION_TOO_LONG</code>,
+  <code>MALFORMED_DESTINATION</code>, <code>UNSUPPORTED_SCHEME</code>, <code>OWN_ORIGIN</code> e <code>INVALID_REQUEST</code>.</li>
+  <li><strong>Campos desconocidos → 400</strong>: el contrato declara <code>additionalProperties: false</code> y Jackson
+  tiene <code>fail_on_unknown_properties: true</code>. Un cliente que manda basura se entera en vez de ser ignorado en silencio.</li>
+</ul>
+
+<p>¿Quién convierte la excepción en 400? <code>ApiExceptionHandler</code> (<code>@RestControllerAdvice</code>): un solo lugar
+para todos los errores. El controlador queda en tres líneas. Y la respuesta es un <strong>DTO</strong>
+(<code>LinkCreatedResponse</code>), nunca la entidad JPA: si mañana cambia la tabla, el contrato no se rompe <span class="tag t">ADR 0001</span>.</p>
+
+<h2>3. Resolver: <code>GET /{alias}</code> <span class="tag c">C</span></h2>
+
+<pre><code>GET /7      ← 302 Found       Location: https://destino…   Cache-Control: no-store
+GET /zz     ← 404 Not Found   página «Este enlace no existe o venció»   Cache-Control: no-store</code></pre>
+
+<h3>¿Por qué 302 y no 301?</h3>
+<p>301 significa «se mudó para siempre» (<a href="https://www.rfc-editor.org/rfc/rfc9110.html#name-301-moved-permanently">§15.4.2</a>),
+y los navegadores lo cachean por defecto. Cuando el alias <code>7</code> se recicle, el navegador de alguien seguiría
+mandándolo al destino viejo <strong>sin consultar al servidor</strong>: no podrías ni vencerlo ni reasignarlo. 302 dice «está
+temporalmente en otro lado, seguí usando la URI original»
+(<a href="https://www.rfc-editor.org/rfc/rfc9110.html#name-302-found">§15.4.3</a>), que es exactamente un enlace que vence.</p>
+
+<h3>¿Y <code>no-store</code>?</h3>
+<p>Refuerza lo mismo: le prohíbe a cualquier caché (navegador, proxy) guardar la respuesta
+(<a href="https://www.rfc-editor.org/rfc/rfc9111.html#name-no-store-2">RFC 9111</a>). Tampoco se cachea el 404,
+porque ese alias puede volver a estar vigente en un minuto.</p>
+
+<h3>¿Por qué 404 y no 410 Gone?</h3>
+<p>410 significa «se fue y no vuelve». Un alias vencido <em>sí</em> vuelve, porque se recicla. Además, Q11 acordó la misma
+respuesta para «nunca existió» y «venció», y eso tiene otra ventaja: no revela qué alias existieron.</p>
+
+<h3>¿Cómo no choca <code>/{alias}</code> con <code>/app.js</code> o <code>/api/links</code>?</h3>
+<p>El mapeo es <code>@GetMapping("/{alias:[1-9A-HJ-NP-Za-km-z]{1,32}}")</code>. Un punto (<code>app.js</code>) o una barra
+(<code>/api/links</code>) no calzan con el patrón, así que esas rutas nunca entran como alias. Y los códigos
+<code>api</code> y <code>error</code> se reservan para que el generador no los emita (lección 2).</p>
+
+<h2>4. ¿Es «REST» de verdad?</h2>
+<p>Respuesta honesta: es una API HTTP orientada a recursos, con verbos y códigos de estado bien usados. Es el
+<strong>nivel 2</strong> del modelo de madurez de Richardson. No tiene hipermedia (HATEOAS, nivel 3). Para dos
+operaciones es razonable; decirlo con nombre y apellido suma más que afirmar «es RESTful».</p>
+
+<hr>
+
+<h2>5. Practicá</h2>
+
+<section class="ejercicio quiz" data-correcta="c">
+  <p class="pregunta">¿Por qué la redirección es 302 y no 301?</p>
+  <div class="opciones">
+    <button data-op="a">301 no lo soportan las extensiones</button>
+    <button data-op="b">302 es más rápido para el navegador</button>
+    <button data-op="c">301 se cachea y el alias cambia</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Las extensiones ni siquiera resuelven enlaces: solo crean.</p>
+  <p class="devolucion" data-op="b" hidden>✘ La velocidad es la misma; la diferencia está en el significado y en la caché.</p>
+  <p class="devolucion" data-op="c" hidden>✔ Un 301 cacheado sobrevive al vencimiento y a la reasignación del alias.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">Mandan <code>{"destination": "https://x.com", "alias": "hola"}</code>. ¿Qué responde?</p>
+  <div class="opciones">
+    <button data-op="a">400 INVALID_REQUEST</button>
+    <button data-op="b">201 ignorando alias</button>
+    <button data-op="c">201 con alias "hola"</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Propiedad desconocida: <code>additionalProperties: false</code> en el contrato y <code>fail_on_unknown_properties</code> en Jackson. Lo prueba <code>rechazaPropiedadesDesconocidasDelContrato</code>.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Ignorar en silencio es lo que se evitó a propósito: el cliente creería que pidió un alias.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Los alias personalizados no existen en la etapa 1. Están analizados en <code>evidencia-evolucion.md</code>, sin implementar.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">¿Quién transforma <code>InvalidDestinationException</code> en un 400?</p>
+  <div class="opciones">
+    <button data-op="a">LinkApiController</button>
+    <button data-op="b">ApiExceptionHandler</button>
+    <button data-op="c">DestinationValidator</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ El controlador no tiene ningún <code>try/catch</code>: la excepción lo atraviesa.</p>
+  <p class="devolucion" data-op="b" hidden>✔ <code>@RestControllerAdvice</code> + <code>@ExceptionHandler</code>: usa el <code>reason</code> como <code>error</code> y el mensaje como <code>message</code>.</p>
+  <p class="devolucion" data-op="c" hidden>✘ El validador es dominio: lanza la excepción, pero no sabe que existe HTTP.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Por qué no se devuelve directamente <code>AssignmentEntity</code> como JSON?</p>
+  <div class="opciones">
+    <button data-op="a">Ataría el contrato a la tabla</button>
+    <button data-op="b">Jackson no serializa entidades JPA</button>
+    <button data-op="c">Sería más lento de serializar</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Cambiar una columna rompería la web y las extensiones. El DTO desacopla (ADR 0001).</p>
+  <p class="devolucion" data-op="b" hidden>✘ Técnicamente puede serializarlas. El problema es de diseño, no de capacidad.</p>
+  <p class="devolucion" data-op="c" hidden>✘ No es una cuestión de rendimiento.</p>
+</section>
+
+<p class="marcador" data-quiz-marcador></p>
+
+<section class="ejercicio oral" data-segundos="60">
+  <p class="pregunta">En voz alta: «Justifiquen los códigos de estado de su API.»</p>
+  <details class="modelo">
+    <summary>Respuesta modelo</summary>
+    <p>«Crear es un POST a la colección <code>/api/links</code> y responde 201 porque crea una asignación. No es
+    idempotente, y eso lo acordamos: cada pedido es una asignación nueva. Si la entrada es inválida respondemos 400
+    con un código estable y un mensaje legible, todo centralizado en un <code>ControllerAdvice</code>. Resolver
+    responde 302, no 301, porque el 301 se cachea como permanente, y nuestro alias vence y se reasigna. Por lo
+    mismo, todo va con <code>no-store</code>. Si no hay asignación vigente, respondemos 404 y no 410, porque el alias
+    puede volver a usarse, y además así no revelamos si existió. El contrato está en <code>openapi.yaml</code> y se
+    escribió antes del código.»</p>
+  </details>
+</section>
+
+<hr>
+
+<h2>Para leer</h2>
+<p><strong>Fuente primaria:</strong> <a href="https://www.rfc-editor.org/rfc/rfc9110.html#name-redirection-3xx">RFC 9110 §15.4,
+<em>Redirection 3xx</em></a>. Leé solo 301, 302 y 307: son cinco párrafos. Complemento: Martin Fowler,
+<a href="https://martinfowler.com/articles/richardsonMaturityModel.html">«Richardson Maturity Model»</a>, para poder decir
+«nivel 2» con fundamento.</p>
+
+<p>← <a href="0003-persistencia-y-concurrencia.html">Lección 3</a> ·
+<a href="../reference/mapa-del-codigo.html">Mapa del código</a> ·
+<a href="0005-clientes-web-extensiones-qr.html">Lección 5: web, extensiones y QR</a> →</p>
+
+<p class="victoria">¿Dudas? Preguntame, por ejemplo: «¿por qué no 307?» o «mostrame el <code>openapi.yaml</code> del 400».</p>
+
+</main>
+<script src="../assets/quiz.js"></script>
+<script src="../assets/oral.js"></script>
+</body>
+</html>

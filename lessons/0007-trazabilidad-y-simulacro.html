@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lección 7 · Trazabilidad y simulacro</title>
+<link rel="stylesheet" href="../assets/curso.css">
+<style>
+  .clasificar textarea { width: 100%; min-height: 8rem; font-family: var(--mono); font-size: .75rem; background: var(--panel); color: var(--fg); border: 1px solid var(--rule); margin-top: .6rem; }
+  .clasificar td.eleccion { font-size: .8rem; }
+</style>
+</head>
+<body>
+<main>
+
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 7 de 7 · ~30 minutos</p>
+<h1>Trazabilidad y simulacro de coloquio</h1>
+<p class="subtitulo">De dónde sale cada decisión, y diez preguntas que te pueden tocar el martes.</p>
+
+<div class="victoria">
+  <strong>Al terminar vas a poder:</strong> ante cualquier pieza del sistema, decir si la pidió la consigna,
+  la acordaron con el profe o la decidieron ustedes, y responder sin leer las preguntas más difíciles.
+</div>
+
+<h2>1. Tres orígenes, tres formas de defender</h2>
+
+<div class="tabla-scroll"><table>
+<tr><th>Origen</th><th>Cómo lo decís en el coloquio</th></tr>
+<tr><td><span class="tag c">C</span> consigna</td><td>«La consigna lo pide: …» y citás la frase.</td></tr>
+<tr><td><span class="tag q">Q</span> lo confirmó el profe</td><td>«Lo consultamos con usted como cliente, en la pregunta tal, y acordamos …»</td></tr>
+<tr><td><span class="tag q">Q</span> lo decidieron ustedes</td><td>«Lo decidimos nosotros por esto, con este tradeoff, y quedó en el ADR tal.»</td></tr>
+<tr><td><span class="tag t">T</span> técnica</td><td>«Es una decisión de implementación. La alternativa era …, y elegimos esta porque …»</td></tr>
+</table></div>
+
+<p>Lo que la consigna pide <strong>literalmente</strong>, y nada más: URL válida → enlace único
+<code>http://{dominio_o_ip}/{alias}</code>; alias corto y memorizable; web con campo y botón ACORTAR; extensión
+Chrome y Firefox que con un toque acorta y muestra; QR en las dos; 60 minutos y después reasignable;
+redirección transparente; JPA/Hibernate sobre una base relacional; API REST en Spring Boot con cliente web;
+y en la metodología: elucidación con el cliente, diseño antes del código, OpenAPI, tests unitarios y de
+integración. <strong>Todo lo demás lo acordaron o lo decidieron ustedes.</strong></p>
+
+<h2>2. Clasificá Q1–Q26</h2>
+
+<p>Tema por tema de <a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/docs/requisitos-etapa-1.md"><code>requisitos-etapa-1.md</code></a>:
+¿lo confirmó el profe o lo decidiste vos? Tu marca queda guardada en este navegador. Al terminar, tocá
+<em>Copiar resumen</em> y pegámelo en la terminal: con eso actualizo el documento del repo, que hoy dice
+«respuestas del usuario» y se puede leer en tu contra.</p>
+
+<section class="ejercicio clasificar" data-clave="q-origen" data-opciones="Profe|Yo|No sé">
+<div class="tabla-scroll"><table>
+<tr><th>Tema (pregunta)</th><th>¿Quién?</th></tr>
+<tr data-fila="Vigencia exacta; el tiempo apagado cuenta (Q1, Q10)"><td>Vigencia exacta; el tiempo apagado cuenta (Q1, Q10)</td><td class="eleccion"></td></tr>
+<tr data-fila="Reciclar vencidos, primero los cortos (Q1, Q19)"><td>Reciclar vencidos, primero los cortos (Q1, Q19)</td><td class="eleccion"></td></tr>
+<tr data-fila="Alfabeto de 58 y agotar longitudes (Q20)"><td>Alfabeto de 58 y agotar longitudes (Q20)</td><td class="eleccion"></td></tr>
+<tr data-fila="Cada solicitud es una asignación nueva (Q2)"><td>Cada solicitud es una asignación nueva (Q2)</td><td class="eleccion"></td></tr>
+<tr data-fila="Validar solo el formato; aceptar LAN y credenciales (Q3, Q12)"><td>Validar solo el formato; aceptar LAN y credenciales (Q3, Q12)</td><td class="eleccion"></td></tr>
+<tr data-fila="Máximo 8192 caracteres, rechazar espacios (Q25)"><td>Máximo 8192 caracteres, rechazar espacios (Q25)</td><td class="eleccion"></td></tr>
+<tr data-fila="Sin cuentas ni consola en la etapa 1 (Q4)"><td>Sin cuentas ni consola en la etapa 1 (Q4)</td><td class="eleccion"></td></tr>
+<tr data-fila="Extensiones: pestaña activa, instalación manual (Q5)"><td>Extensiones: pestaña activa, instalación manual (Q5)</td><td class="eleccion"></td></tr>
+<tr data-fila="Descargar el QR como PNG (Q5, Q17)"><td>Descargar el QR como PNG (Q5, Q17)</td><td class="eleccion"></td></tr>
+<tr data-fila="Mostrar vencimiento y aviso de reutilización (Q17)"><td>Mostrar vencimiento y aviso de reutilización (Q17)</td><td class="eleccion"></td></tr>
+<tr data-fila="Demo en red local con celular (Q6)"><td>Demo en red local con celular (Q6)</td><td class="eleccion"></td></tr>
+<tr data-fila="Monolito modular (Q8)"><td>Monolito modular (Q8)</td><td class="eleccion"></td></tr>
+<tr data-fila="Conservar el historial (Q9, Q18)"><td>Conservar el historial (Q9, Q18)</td><td class="eleccion"></td></tr>
+<tr data-fila="404 con mensaje para vencido y desconocido (Q11)"><td>404 con mensaje para vencido y desconocido (Q11)</td><td class="eleccion"></td></tr>
+<tr data-fila="Capacidad: 10 clientes y 1000 asignaciones (Q13)"><td>Capacidad: 10 clientes y 1000 asignaciones (Q13)</td><td class="eleccion"></td></tr>
+<tr data-fila="95 % en un segundo o menos (Q26)"><td>95 % en un segundo o menos (Q26)</td><td class="eleccion"></td></tr>
+<tr data-fila="PostgreSQL (Q14)"><td>PostgreSQL (Q14)</td><td class="eleccion"></td></tr>
+<tr data-fila="Java 17 y Maven (Q15)"><td>Java 17 y Maven (Q15) — hoy es Gradle</td><td class="eleccion"></td></tr>
+<tr data-fila="Web HTML/JS servida por el backend (Q15)"><td>Web HTML/JS servida por el backend (Q15)</td><td class="eleccion"></td></tr>
+<tr data-fila="HTTP sin TLS para la demo (Q16)"><td>HTTP sin TLS para la demo (Q16)</td><td class="eleccion"></td></tr>
+<tr data-fila="Reintentos sin idempotencia (Q21)"><td>Reintentos sin idempotencia (Q21)</td><td class="eleccion"></td></tr>
+<tr data-fila="La vigencia se evalúa al resolver (Q22)"><td>La vigencia se evalúa al resolver (Q22)</td><td class="eleccion"></td></tr>
+<tr data-fila="Rechazar enlaces al propio acortador (Q23)"><td>Rechazar enlaces al propio acortador (Q23)</td><td class="eleccion"></td></tr>
+<tr data-fila="Evidencia de QA y de adaptación (Q24)"><td>Evidencia de QA y de adaptación (Q24)</td><td class="eleccion"></td></tr>
+</table></div>
+<button data-copiar>Copiar resumen</button>
+<textarea data-resumen readonly aria-label="Resumen de la clasificación"></textarea>
+</section>
+
+<h2>3. Simulacro: diez preguntas probables</h2>
+
+<p class="nota">Hacelo con tu compañero: uno lee la pregunta y el otro responde con el reloj corriendo, sin mirar.
+Después comparan con la respuesta modelo y cambian de rol. Lo que ninguno de los dos pueda contestar, me lo traen.</p>
+
+<section class="ejercicio oral" data-segundos="90">
+  <p class="pregunta">1. «El código lo generó una IA. ¿Qué hicieron ustedes?»</p>
+  <details class="modelo"><summary>Respuesta modelo</summary>
+  <p>«Lo que la consigna pone en el centro: especificar, diseñar y validar. Hicimos la elucidación con usted (Q1–Q26),
+  registramos las decisiones en ADRs, escribimos el contrato OpenAPI y el glosario <em>antes</em> del código, partimos el
+  trabajo en issues chicos con criterios de aceptación, revisamos cada entrega contra estándares escritos y la
+  verificamos con tests y evidencia: capacidad, demo física y un experimento de evolución. La IA escribió líneas;
+  las decisiones y la verificación son nuestras, y por eso podemos explicar cada parte.»</p>
+  <p class="nota">Es la pregunta más probable por el título del TP. Decí la verdad sobre qué hiciste vos: la honestidad suma más que fingir que tipeaste todo.</p></details>
+</section>
+
+<section class="ejercicio oral" data-segundos="45">
+  <p class="pregunta">2. «¿Por qué 302 y no 301?»</p>
+  <details class="modelo"><summary>Respuesta modelo</summary>
+  <p>«El 301 es permanente y los navegadores lo cachean. Nuestro alias vence y se reasigna, así que un 301 cacheado
+  seguiría mandando al destino viejo sin consultar al servidor. El 302 es temporal, y además va con <code>no-store</code>.»</p></details>
+</section>
+
+<section class="ejercicio oral" data-segundos="60">
+  <p class="pregunta">3. «Un QR viejo puede llevar a otro destino. ¿No es un riesgo de seguridad?»</p>
+  <details class="modelo"><summary>Respuesta modelo</summary>
+  <p>«Sí, y lo aceptamos a conciencia: la consigna pide reasignar y alias lo más cortos posible, y acordamos que un
+  enlace viejo pueda llevar a un destino nuevo (Q1/Q19). Lo mitigamos avisándolo en cada resultado
+  (<code>reuseNotice</code>). Si se quisiera reducir el riesgo, hay alternativas que se cambian solo en la política de
+  reciclaje, sin tocar el contrato: un período de gracia antes de reutilizar, o no reciclar y aceptar alias más
+  largos.»</p></details>
+</section>
+
+<section class="ejercicio oral" data-segundos="60">
+  <p class="pregunta">4. «El ADR dice PostgreSQL y acordaron Maven. ¿Por qué hay HSQLDB y Gradle?»</p>
+  <details class="modelo"><summary>Respuesta modelo</summary>
+  <p>«Fue un cambio posterior (PR #14), hecho con un agente en la nube a pedido mío, para
+  <em>[completá tu motivo real: por ejemplo, levantarlo sin Docker]</em>. PostgreSQL sigue siendo el motor principal
+  y el de todos los tests. HSQLDB es un perfil opcional, sin tests automáticos, y su esquema se mantiene aparte
+  porque ahí Flyway está desactivado. Es una deuda reconocida: el ADR 0004 todavía no lo menciona, y el PR dice que
+  Flyway no soporta HSQLDB, cuando existe el módulo <code>flyway-database-hsqldb</code>.»</p>
+  <p class="nota">Antes del martes, lo ideal es actualizar el ADR o el documento de acuerdos. Decime y lo preparo.</p></details>
+</section>
+
+<section class="ejercicio oral" data-segundos="60">
+  <p class="pregunta">5. «Ese candado global, ¿no es un cuello de botella?»</p>
+  <details class="modelo"><summary>Respuesta modelo</summary>
+  <p>«Sí: serializa las creaciones, no las redirecciones. Lo elegimos porque es simple y fácil de probar, y sobra
+  para el objetivo acordado: 10 clientes, p95 de 113 ms en creación. Si la carga creciera, se cambia dentro del
+  adaptador JPA (por ejemplo, <code>SKIP LOCKED</code> por alias candidato) sin tocar dominio, casos de uso ni
+  contrato, y los tests de concurrencia se mantienen.»</p></details>
+</section>
+
+<section class="ejercicio oral" data-segundos="45">
+  <p class="pregunta">6. «¿Qué pasa cuando se agoten los alias de 1 y 2 caracteres?»</p>
+  <details class="modelo"><summary>Respuesta modelo</summary>
+  <p>«Nada se rompe: la secuencia sigue con 3 caracteres, después con 4, y así. Pero antes de crecer, se reciclan los
+  vencidos. Con 1000 asignaciones vigentes alcanzan los 58 + 3364 códigos de hasta dos caracteres. La columna admite
+  16, que son 58<sup>16</sup> combinaciones.»</p></details>
+</section>
+
+<section class="ejercicio oral" data-segundos="90">
+  <p class="pregunta">7. «Etapa 2: piden alias personalizados. ¿Qué tocan?»</p>
+  <details class="modelo"><summary>Respuesta modelo</summary>
+  <p>«Primero el contrato: un campo opcional <code>alias</code> en el request (hoy el esquema rechaza propiedades
+  extra) y errores nuevos para alias inválido o no disponible. En el dominio, una regla de validación del alias. En
+  el puerto, una operación para reservar un código específico, y en <code>CreateLink</code>, una rama para usarlo.
+  No hace falta migración. Hay un riesgo que ya detectamos: el generador secuencial podría alcanzar después un
+  código que alguien pidió a mano, así que tiene que saltear los ocupados. Está analizado en
+  <code>evidencia-evolucion.md</code>.»</p></details>
+</section>
+
+<section class="ejercicio oral" data-segundos="45">
+  <p class="pregunta">8. «La consigna dice HTTP/HTTPS. ¿Dónde está HTTPS?»</p>
+  <details class="modelo"><summary>Respuesta modelo</summary>
+  <p>«Para la demo en red local elegimos HTTP (Q16), porque para el usuario es transparente. La redirección es la
+  misma con HTTPS: se agrega un proxy con TLS adelante (por ejemplo Caddy o nginx) y se cambia
+  <code>PUBLIC_BASE_URL</code> a <code>https://…</code>, sin tocar código.»</p></details>
+</section>
+
+<section class="ejercicio oral" data-segundos="60">
+  <p class="pregunta">9. «Dicen que el dominio no depende de Spring, pero <code>CreateLink</code> usa <code>@Transactional</code>.»</p>
+  <details class="modelo"><summary>Respuesta modelo</summary>
+  <p>«El <em>dominio</em> no importa nada de Spring: se puede verificar en el paquete. <code>CreateLink</code> es de
+  <em>aplicación</em>, y la única dependencia que tiene es la anotación de transacción. Es un tradeoff aceptado en el
+  ADR 0001: la alternativa, un puerto de transacciones propio, agrega código sin beneficio en esta etapa. Si
+  quisiéramos sacarlo, se envuelve el caso de uso desde infraestructura.»</p></details>
+</section>
+
+<section class="ejercicio oral" data-segundos="60">
+  <p class="pregunta">10. «¿Qué no cumplieron, o cumplieron a medias?»</p>
+  <details class="modelo"><summary>Respuesta modelo</summary>
+  <p>«No hay HTTPS servido, por decisión (Q16). El OpenAPI está como archivo, sin Swagger UI. En Firefox la extensión
+  se instala de forma temporal y se pierde al reiniciar el navegador. El perfil HSQLDB no tiene tests ni migraciones
+  versionadas. Y el documento de acuerdos no distingue qué confirmó usted y qué decidimos nosotros: eso lo estamos
+  corrigiendo.»</p>
+  <p class="nota">Reconocer los límites con nombre y apellido es una señal de calidad, no de debilidad.</p></details>
+</section>
+
+<hr>
+
+<h2>Para el martes</h2>
+<ul>
+  <li>Repasá el <a href="../reference/mapa-del-codigo.html">mapa del código</a> (se puede imprimir).</li>
+  <li>Volvé a hacer el quiz de cada lección: las opciones se mezclan cada vez. Si acertás todo al primer intento,
+  esa lección está.</li>
+  <li>Hacé el simulacro dos veces, un día distinto cada vez: espaciar la práctica es lo que hace que se fije.</li>
+</ul>
+
+<p>← <a href="0006-tests-y-evidencia.html">Lección 6</a> · <a href="../index.html">Inicio del curso</a></p>
+
+<p class="victoria">Mandame el resumen de la clasificación y las preguntas del simulacro que te costaron. Con eso
+armamos el repaso final.</p>
+
+</main>
+<script src="../assets/clasificar.js"></script>
+<script src="../assets/oral.js"></script>
+</body>
+</html>

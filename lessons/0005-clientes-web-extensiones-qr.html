@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lección 5 · Web, extensiones y QR</title>
+<link rel="stylesheet" href="../assets/curso.css">
+</head>
+<body>
+<main>
+
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 5 de 7 · ~15 minutos</p>
+<h1>Clientes: web, extensiones y QR</h1>
+<p class="subtitulo">Tres puertas al mismo servicio, y un QR que apunta al enlace corto, no al destino.</p>
+
+<div class="victoria">
+  <strong>Al terminar vas a poder:</strong> contar qué pasa cuando alguien toca el ícono de la extensión,
+  y defender por qué el QR codifica el enlace corto y se genera en el navegador.
+</div>
+
+<h2>0. Repaso de la lección 4</h2>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">¿Por qué un alias vencido responde 404 y no 410?</p>
+  <div class="opciones">
+    <button data-op="a">410 no existe en HTTP</button>
+    <button data-op="b">El alias puede volver a usarse</button>
+    <button data-op="c">Spring no soporta el 410</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Existe: es <em>Gone</em>, y significa «no vuelve».</p>
+  <p class="devolucion" data-op="b" hidden>✔ Y además, con una misma respuesta para desconocido y vencido (Q11), no se revela qué alias existieron.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Spring devuelve cualquier código de estado.</p>
+</section>
+
+<h2>1. La web <span class="tag c">C</span> literal</h2>
+
+<p>La consigna pide «una página web con un campo <em>dirección a acortar</em> y un botón ACORTAR». Eso es
+<a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/src/main/resources/static/index.html"><code>static/index.html</code></a>
++ <code>app.js</code>, servidos <strong>por el mismo Spring Boot</strong> <span class="tag q">Q15</span>. Como la página y la API
+están en el mismo origen, no hace falta CORS.</p>
+
+<ul>
+  <li>El formulario tiene <code>novalidate</code> y el JS no filtra nada: <strong>la única validación es la del servidor</strong>.
+  Así hay una sola regla, en el dominio, y la web muestra el <code>message</code> del 400. El test que lo cubre es
+  <code>laWebEntregaLaEntradaSinFiltrosPreviosDelCliente</code>.</li>
+  <li>Muestra el enlace, el vencimiento (hora local), el aviso de reutilización y el QR descargable como PNG
+  <span class="tag q">Q5</span> <span class="tag q">Q17</span>.</li>
+</ul>
+
+<h2>2. El QR <span class="tag c">C</span></h2>
+
+<pre><code>shortUrl (de la respuesta 201)
+  → vendor/qrcode.js     biblioteca qrcode-generator (MIT): texto → matriz de módulos, corrección M
+  → qr-code.js  QrPng    código propio: matriz → bytes PNG (sin canvas)
+  → Blob → &lt;img&gt; y &lt;a download="qr-&lt;alias&gt;.png"&gt;     los MISMOS bytes se ven y se descargan</code></pre>
+
+<ul>
+  <li><strong>Codifica el <code>shortUrl</code>, no el destino.</strong> Si codificara el destino, el QR saltearía al
+  acortador: no vencería nunca, y el enlace corto no tendría sentido. La consecuencia aceptada es que un QR viejo
+  sigue al alias reasignado (CONTEXT.md, «Código QR del enlace»).</li>
+  <li><strong>Se genera en el navegador</strong>: el backend no guarda ni sirve imágenes, y solo devuelve el DTO.</li>
+  <li><strong>Biblioteca vendorizada, sin CDN</strong>: la demo corre en una LAN que puede no tener Internet.</li>
+  <li><strong>Encoder PNG propio</strong> (unas 190 líneas): arma el PNG a mano (firma, IHDR, IDAT con zlib sin compresión,
+  CRC-32). Así funciona igual en el navegador y en los tests de Node. <em>Tradeoff:</em> es código propio que hay que
+  mantener. Se compensa con un test que decodifica el PNG con bibliotecas <em>independientes</em> (UPNG + jsQR) y
+  verifica que diga exactamente el <code>shortUrl</code>.</li>
+</ul>
+
+<h2>3. Las extensiones <span class="tag c">C</span> «con solo tocarlo»</h2>
+
+<pre><code>clic en el ícono → se abre popup.html → popup.js:
+  tabs.query(activa)                 permiso activeTab: solo la pestaña, solo al tocar
+  ¿no es http/https?  → TAB_NOT_SHORTENABLE (no llama a la API)
+  storage.local "apiBase"            dirección del servicio (por defecto http://localhost:8080)
+  LinkApi.createLink → POST /api/links       timeout de 10 s
+  muestra enlace + vencimiento + aviso + QR  (mismo QrPng que la web)
+  "Descargar QR" → downloads.download</code></pre>
+
+<ul>
+  <li><strong>Un solo código, dos paquetes</strong>: la fuente está en <code>extensiones/compartido/</code>, y
+  <code>sincronizar.sh</code> la copia a <code>chrome/</code> y <code>firefox/</code>, que solo agregan su
+  <code>manifest.json</code>. Los tests verifican que las copias sean idénticas byte a byte. El QR también es el
+  mismo archivo de la web.</li>
+  <li><strong>Chrome MV3, Firefox MV2</strong> <span class="tag t">T</span>: en Firefox MV3 los permisos de host
+  se conceden en ejecución y el pedido a la API puede quedar bloqueado en silencio en plena demo. En MV2 se conceden al
+  instalar. En Chrome, MV2 ya no se admite. Instalación manual: en Firefox es «temporal» y se pierde al reiniciar el navegador.</li>
+  <li><strong>Sin CORS en el backend</strong>: una extensión con <code>host_permissions</code> puede hacer
+  <code>fetch</code> a otro origen sin que el servidor lo autorice. Además, el origen <code>moz-extension://&lt;uuid&gt;</code>
+  es aleatorio por instalación, así que no se podría poner en una lista de CORS de forma limpia.</li>
+  <li><strong>La dirección de la API es configurable</strong> porque la IP de la LAN cambia. Pero el
+  <code>shortUrl</code> que se muestra siempre lo arma el <em>servidor</em> con <code>PUBLIC_BASE_URL</code>.</li>
+</ul>
+
+<hr>
+
+<h2>4. Practicá</h2>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Qué texto contiene el QR?</p>
+  <div class="opciones">
+    <button data-op="a">El enlace acortado</button>
+    <button data-op="b">La URL de destino</button>
+    <button data-op="c">El id de asignación</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ El <code>shortUrl</code> de la respuesta. Así el QR pasa por el acortador: vence y sigue al alias.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Así el QR no vencería nunca y no usaría el servicio.</p>
+  <p class="devolucion" data-op="c" hidden>✘ El id es interno: ni siquiera viaja en el contrato.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="c">
+  <p class="pregunta">Abrís la extensión parado en <code>chrome://settings</code>. ¿Qué pasa?</p>
+  <div class="opciones">
+    <button data-op="a">La API responde con un 400</button>
+    <button data-op="b">Se acorta la última página visitada</button>
+    <button data-op="c">Error local sin llamar a la API</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Ni siquiera llega a la API: el popup lo frena antes.</p>
+  <p class="devolucion" data-op="b" hidden>✘ No hay historial: solo se lee la pestaña activa.</p>
+  <p class="devolucion" data-op="c" hidden>✔ <code>TAB_NOT_SHORTENABLE</code>: solo se mandan URLs http/https.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">¿Por qué el backend no tiene configuración CORS?</p>
+  <div class="opciones">
+    <button data-op="a">Se olvidaron de configurarla</button>
+    <button data-op="b">Ningún cliente actual la necesita</button>
+    <button data-op="c">Spring la habilita por defecto</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Es una decisión documentada en <code>extensiones/README.md</code>.</p>
+  <p class="devolucion" data-op="b" hidden>✔ La web es del mismo origen, y las extensiones usan <code>host_permissions</code>.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Spring no habilita CORS por defecto.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Por qué Firefox usa Manifest V2?</p>
+  <div class="opciones">
+    <button data-op="a">En MV3 el permiso de host puede faltar</button>
+    <button data-op="b">Firefox todavía no soporta Manifest V3</button>
+    <button data-op="c">Para reutilizar el manifest de Chrome</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Firefox MV3 concede <code>host_permissions</code> en ejecución, y el <code>fetch</code> fallaría en silencio. MV2 los concede al instalar.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Sí lo soporta; el problema es cómo concede los permisos.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Al contrario: los manifests son lo único distinto entre los dos paquetes.</p>
+</section>
+
+<p class="marcador" data-quiz-marcador></p>
+
+<section class="ejercicio ordenar">
+  <p class="pregunta">Ordená lo que pasa al tocar el ícono de la extensión:</p>
+  <ul class="ordenar-lista">
+    <li data-paso="1">Leer la URL de la pestaña activa</li>
+    <li data-paso="2">Comprobar que sea http o https</li>
+    <li data-paso="3">Leer la dirección de la API guardada</li>
+    <li data-paso="4">Hacer <code>POST /api/links</code> con la URL</li>
+    <li data-paso="5">Mostrar enlace, vencimiento, aviso y QR</li>
+  </ul>
+  <button data-comprobar>Comprobar</button>
+  <p class="devolucion" data-si-ok hidden>✔ Eso es «con solo tocarlo genere y muestre», literal de la consigna. No hay un botón extra: abrir el popup ya acorta.</p>
+</section>
+
+<section class="ejercicio oral" data-segundos="60">
+  <p class="pregunta">En voz alta: «¿Por qué el QR se genera en el navegador y codifica el enlace corto?»</p>
+  <details class="modelo">
+    <summary>Respuesta modelo</summary>
+    <p>«Codifica el enlace corto para que el QR pase por el acortador: así respeta el vencimiento, y si el alias se
+    reasigna lo sigue. Eso lo acordamos y lo avisamos. Se genera en el navegador porque el backend solo devuelve el
+    contrato, y no tiene sentido guardar imágenes. La biblioteca está copiada en el proyecto porque la demo es en
+    LAN, sin depender de un CDN. El PNG lo armamos nosotros para que los mismos bytes se vean y se descarguen, y se
+    puedan testear en Node: un test lo decodifica con bibliotecas independientes y verifica que diga exactamente el
+    <code>shortUrl</code>. La web y las dos extensiones usan el mismo archivo.»</p>
+  </details>
+</section>
+
+<hr>
+
+<h2>Para leer</h2>
+<p><strong>Fuente primaria:</strong> <a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/extensiones/README.md"><code>extensiones/README.md</code></a>
+del repo: decisiones técnicas y limitaciones, explicadas. Complementos:
+<a href="https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3">Chrome — What is Manifest V3</a> y
+<a href="https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/host_permissions">MDN — host_permissions</a>
+(ahí está lo de los permisos «opcionales» en Firefox MV3).</p>
+
+<p>← <a href="0004-http-y-contrato.html">Lección 4</a> ·
+<a href="../reference/mapa-del-codigo.html">Mapa del código</a> ·
+<a href="0006-tests-y-evidencia.html">Lección 6: tests y evidencia</a> →</p>
+
+<p class="victoria">¿Dudas? Preguntame, por ejemplo: «¿qué es la corrección de errores M del QR?» o
+«¿cómo instalo la extensión para mostrarla en vivo?».</p>
+
+</main>
+<script src="../assets/quiz.js"></script>
+<script src="../assets/ordenar.js"></script>
+<script src="../assets/oral.js"></script>
+</body>
+</html>

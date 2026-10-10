@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa del código</title>
+<link rel="stylesheet" href="../assets/curso.css">
+</head>
+<body>
+<main class="ancho">
+
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Referencia</p>
+<h1>Mapa del código</h1>
+<p class="subtitulo">Cada pieza con su capa, qué hace en una línea y de dónde sale.</p>
+
+<p><span class="tag c">C</span> consigna (<code>TP_PP6_v1.0.md</code>) ·
+<span class="tag q">Q#</span> respuesta de la elucidación (<code>docs/requisitos-etapa-1.md</code>; se separa en
+«profe» y «equipo» en la lección 7) · <span class="tag t">T</span> decisión técnica / ADR</p>
+
+<p>Las dependencias apuntan hacia adentro: <strong>infraestructura → aplicación → dominio</strong>.
+Paquete base: <code>io.github.spendice.linkshortener</code>. Código: <a href="https://github.com/SpendIce/PP6-TPIntegrador">SpendIce/PP6-TPIntegrador</a>.</p>
+
+<h2>Dominio <span class="nota">· domain/ · reglas puras, sin Spring</span></h2>
+<div class="tabla-scroll"><table>
+<tr><th>Clase</th><th>Qué hace</th><th>Origen</th></tr>
+<tr><td><code>Assignment</code></td><td>Alias → destino con <code>createdAt</code>/<code>expiresAt</code>. <code>isActiveAt(t)</code> = <code>t &lt; expiresAt</code>.</td><td><span class="tag c">C</span> 60 min · <span class="tag q">Q2</span> una por solicitud</td></tr>
+<tr><td><code>Alias</code></td><td>Código público; solo apunta a su asignación actual. No es la identidad de la asignación.</td><td><span class="tag c">C</span> reasignable · <span class="tag t">T</span> ADR 0002</td></tr>
+<tr><td><code>ExpirationPolicy</code></td><td><code>createdAt + duración</code>, calculado una vez al crear.</td><td><span class="tag c">C</span> 60 min · <span class="tag t">T</span> duración configurable</td></tr>
+<tr><td><code>AliasAlphabet</code></td><td>58 símbolos sin <code>0 O I l</code>, distingue mayúsculas.</td><td><span class="tag c">C</span> memorizable · <span class="tag q">Q20</span></td></tr>
+<tr><td><code>AliasSequence</code></td><td>Índice → código: 58 de 1 carácter, luego 3364 de 2… Saltea rutas reservadas.</td><td><span class="tag c">C</span> lo más corto posible · <span class="tag q">Q20</span></td></tr>
+<tr><td><code>AliasRecycling</code></td><td>Entre vencidos, el más corto; desempate lexicográfico.</td><td><span class="tag c">C</span> «podrá ser reasignada» · <span class="tag q">Q19</span></td></tr>
+<tr><td><code>DestinationValidator</code></td><td>http/https, ≤ 8192, ASCII, con host, no es el propio acortador. No modifica la entrada.</td><td><span class="tag c">C</span> URL válida · <span class="tag q">Q3 Q12 Q23 Q25</span></td></tr>
+<tr><td><code>ServiceOrigin</code></td><td>host + puerto efectivo para detectar orígenes propios.</td><td><span class="tag q">Q23</span></td></tr>
+<tr><td><code>InvalidDestinationException</code></td><td>Rechazo con <code>Reason</code> = código de error del OpenAPI.</td><td><span class="tag t">T</span></td></tr>
+</table></div>
+
+<h2>Aplicación <span class="nota">· application/ · casos de uso y puertos</span></h2>
+<div class="tabla-scroll"><table>
+<tr><th>Clase</th><th>Qué hace</th><th>Origen</th></tr>
+<tr><td><code>CreateLink</code></td><td>Valida → reserva alias → guarda asignación → mueve referencia. Una transacción.</td><td><span class="tag c">C</span> acortamiento</td></tr>
+<tr><td><code>ResolveLink</code></td><td>Alias → asignación actual → ¿vigente ahora? Lectura <code>readOnly</code>.</td><td><span class="tag c">C</span> redirección</td></tr>
+<tr><td><code>CreatedLink</code></td><td>Resultado del caso de uso (sin URL pública).</td><td><span class="tag t">T</span></td></tr>
+<tr><td><code>port/AliasStore</code></td><td>Puerto: <code>claim</code>, <code>findByCode</code>, <code>assignCurrent</code>.</td><td><span class="tag t">T</span> ADR 0001</td></tr>
+<tr><td><code>port/AssignmentStore</code></td><td>Puerto: <code>save</code>, <code>findById</code>. Nunca modifica ni borra.</td><td><span class="tag t">T</span> ADR 0003</td></tr>
+</table></div>
+
+<h2>Infraestructura <span class="nota">· infrastructure/ · adaptadores</span></h2>
+<div class="tabla-scroll"><table>
+<tr><th>Pieza</th><th>Qué hace</th><th>Origen</th></tr>
+<tr><td><code>http/LinkApiController</code></td><td><code>POST /api/links</code> → 201 <code>{shortUrl, alias, expiresAt, reuseNotice}</code>, <code>no-store</code>.</td><td><span class="tag c">C</span> API REST · <span class="tag q">Q17</span> vencimiento y aviso</td></tr>
+<tr><td><code>http/RedirectController</code></td><td><code>GET /{alias}</code> → 302 <code>Location</code> o 404 «Este enlace no existe o venció».</td><td><span class="tag c">C</span> redirección · <span class="tag q">Q11</span> 404</td></tr>
+<tr><td><code>http/ApiExceptionHandler</code></td><td>Excepciones → 400 <code>{error, message}</code>; JSON inválido → <code>INVALID_REQUEST</code>.</td><td><span class="tag c">C</span> buenas prácticas REST</td></tr>
+<tr><td><code>http/dto/*</code></td><td>Contrato de la API separado de las entidades.</td><td><span class="tag t">T</span> ADR 0001</td></tr>
+<tr><td><code>persistence/AliasEntity</code>, <code>AssignmentEntity</code></td><td>Tablas <code>alias</code> y <code>asignacion</code>.</td><td><span class="tag c">C</span> JPA/Hibernate</td></tr>
+<tr><td><code>persistence/CodeGeneratorEntity</code></td><td>Fila única con <code>proximo_indice</code>; se bloquea en cada reserva.</td><td><span class="tag t">T</span></td></tr>
+<tr><td><code>persistence/JpaAliasStore</code></td><td>Lock → busca vencidos → recicla o genera código nuevo.</td><td><span class="tag t">T</span></td></tr>
+<tr><td><code>persistence/JpaAssignmentStore</code></td><td>INSERT/SELECT de asignaciones; mapea entidad ↔ dominio.</td><td><span class="tag t">T</span></td></tr>
+<tr><td><code>*JpaRepository</code></td><td>Spring Data; <code>findRecyclableCodes</code> (JPQL) y <code>@Lock(PESSIMISTIC_WRITE)</code>.</td><td><span class="tag t">T</span></td></tr>
+<tr><td><code>config/DomainConfig</code></td><td>Cableado: construye dominio y casos de uso; <code>Clock</code> UTC.</td><td><span class="tag t">T</span></td></tr>
+<tr><td><code>config/ShortenerProperties</code></td><td><code>public-base-url</code>, <code>link-duration</code>, <code>own-origins</code>, <code>reserved-routes</code>.</td><td><span class="tag t">T</span></td></tr>
+</table></div>
+
+<h2>Base de datos y configuración</h2>
+<div class="tabla-scroll"><table>
+<tr><th>Pieza</th><th>Qué hace</th><th>Origen</th></tr>
+<tr><td><code>V1__esquema_inicial.sql</code></td><td>Tablas + FK compuesta <code>(codigo, asignacion_actual_id)</code> + fila del generador.</td><td><span class="tag c">C</span> relacional · <span class="tag t">T</span> diseño</td></tr>
+<tr><td><code>V2__indice_vencimiento_asignacion.sql</code></td><td>Índice sobre <code>vence_en</code> para buscar vencidos.</td><td><span class="tag t">T</span></td></tr>
+<tr><td>Flyway + <code>ddl-auto: validate</code></td><td>Las migraciones definen el esquema; Hibernate solo lo valida.</td><td><span class="tag t">T</span></td></tr>
+<tr><td>PostgreSQL / <code>docker-compose.yml</code></td><td>Motor de la app y de los tests.</td><td><span class="tag c">C</span> relacional · <span class="tag q">Q14</span> ADR 0004</td></tr>
+<tr><td><code>openapi.yaml</code></td><td>Contrato: 201/400 en <code>/api/links</code>, 302/404 en <code>/{alias}</code>.</td><td><span class="tag c">C</span> OpenAPI/Swagger</td></tr>
+</table></div>
+
+<h2>Clientes</h2>
+<div class="tabla-scroll"><table>
+<tr><th>Pieza</th><th>Qué hace</th><th>Origen</th></tr>
+<tr><td><code>static/index.html</code>, <code>app.js</code></td><td>Campo «Dirección a acortar» + botón Acortar → <code>fetch</code> a la API.</td><td><span class="tag c">C</span> literal</td></tr>
+<tr><td><code>static/qr-code.js</code></td><td>Matriz QR → PNG propio; codifica el <code>shortUrl</code>, no el destino.</td><td><span class="tag c">C</span> QR · <span class="tag q">Q5 Q17</span> PNG</td></tr>
+<tr><td><code>extensiones/compartido/</code></td><td>Popup que acorta la pestaña activa al abrirse.</td><td><span class="tag c">C</span> «con solo tocarlo» · <span class="tag q">Q5</span></td></tr>
+<tr><td><code>chrome/</code> MV3 · <code>firefox/</code> MV2</td><td>Solo cambia el manifest; <code>sincronizar.sh</code> copia el resto.</td><td><span class="tag t">T</span></td></tr>
+</table></div>
+
+<h2>Verificación</h2>
+<div class="tabla-scroll"><table>
+<tr><th>Pieza</th><th>Qué prueba</th><th>Origen</th></tr>
+<tr><td><code>domain/*Test</code>, <code>application/*Test</code></td><td>Unitarios; aplicación con <code>InMemoryStores</code>.</td><td><span class="tag c">C</span> pruebas unitarias</td></tr>
+<tr><td><code>*HttpTest</code></td><td>Integración HTTP + PostgreSQL (Testcontainers), <code>MutableClock</code> para el tiempo.</td><td><span class="tag c">C</span> integración · <span class="tag q">Q24</span></td></tr>
+<tr><td><code>scripts/capacidad</code></td><td>10 clientes, 1000 asignaciones, p95 ≤ 1 s.</td><td><span class="tag q">Q13 Q26</span></td></tr>
+<tr><td><code>scripts/demo</code>, <code>docs/evidencia-*</code></td><td>Demo de punta a punta + evidencia manual.</td><td><span class="tag q">Q24</span></td></tr>
+<tr><td><code>EvolucionDuracionHttpTest</code></td><td>Cambiar la duración no afecta a los enlaces ya creados.</td><td><span class="tag c">C</span> Cliente Incierto · <span class="tag q">Q24</span></td></tr>
+</table></div>
+
+<h2>Build y ejecución <span class="nota">· desde el PR #14</span></h2>
+<div class="tabla-scroll"><table>
+<tr><th>Pieza</th><th>Qué hace</th><th>Origen</th></tr>
+<tr><td><code>build.gradle</code> + <code>gradlew</code></td><td>Build con Gradle (reemplazó a <code>pom.xml</code>). <code>./gradlew test</code>, <code>./gradlew bootRun</code>.</td><td><span class="tag t">T</span> (Q15 decía Maven)</td></tr>
+<tr><td><code>application-hsqldb.yml</code> + <code>db/hsqldb/schema.sql</code></td><td>Perfil sin Docker: <code>./gradlew hsqldbServer</code> + <code>bootRun -Phsqldb</code>. Flyway apagado, <code>ddl-auto: none</code>, sin tests automáticos.</td><td><span class="tag t">T</span> (ADR 0004 no lo menciona)</td></tr>
+</table></div>
+
+<p class="nota">Lecciones:
+<a href="../lessons/0001-el-mapa-capas-y-recorridos.html">1 · El mapa</a> ·
+<a href="../lessons/0002-alias-secuencia-reciclaje-vencimiento.html">2 · Alias</a> ·
+<a href="../lessons/0003-persistencia-y-concurrencia.html">3 · Persistencia</a> ·
+<a href="../lessons/0004-http-y-contrato.html">4 · HTTP</a> ·
+<a href="../lessons/0005-clientes-web-extensiones-qr.html">5 · Clientes</a> ·
+<a href="../lessons/0006-tests-y-evidencia.html">6 · Tests</a> ·
+<a href="../lessons/0007-trazabilidad-y-simulacro.html">7 · Simulacro</a> ·
+<a href="../index.html">Inicio</a></p>
+</main>
+</body>
+</html>

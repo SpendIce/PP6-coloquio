@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coloquio TP Integrador</title>
+<link rel="stylesheet" href="assets/curso.css">
+</head>
+<body>
+<main>
+
+<p class="meta">Paradigmas de Programación VI · TP Integrador · Coloquio del martes 13/10/2026</p>
+<h1>Preparación del coloquio</h1>
+<p class="subtitulo">Siete lecciones cortas para explicar sin leer cada parte del acortador de enlaces: qué hace,
+por qué está así y de dónde sale el requisito.</p>
+
+<div class="victoria">
+  <strong>Cómo usarlas:</strong> una o dos por día, en orden. Cada una abre con un repaso de la anterior, tiene un
+  quiz con corrección inmediata (las opciones se mezclan, así que se puede repetir) y termina con una práctica
+  <em>oral</em> cronometrada, porque el coloquio es hablado. Arriesgá antes de mirar la respuesta: el esfuerzo de
+  recordar es lo que fija lo aprendido.
+</div>
+
+<h2>Lecciones</h2>
+<div class="tabla-scroll"><table>
+<tr><th>#</th><th>Lección</th><th>Al terminar podés…</th></tr>
+<tr><td>1</td><td><a href="lessons/0001-el-mapa-capas-y-recorridos.html">El mapa: capas y recorridos</a></td><td>Recorrer un POST y un GET clase por clase.</td></tr>
+<tr><td>2</td><td><a href="lessons/0002-alias-secuencia-reciclaje-vencimiento.html">Alias: secuencia, reciclaje y vencimiento</a></td><td>Predecir qué alias recibe la próxima creación.</td></tr>
+<tr><td>3</td><td><a href="lessons/0003-persistencia-y-concurrencia.html">Persistencia y concurrencia</a></td><td>Explicar por qué dos pedidos simultáneos no reciben el mismo alias.</td></tr>
+<tr><td>4</td><td><a href="lessons/0004-http-y-contrato.html">HTTP y contrato</a></td><td>Defender 201, 302, 400, 404 y <code>no-store</code> con la RFC.</td></tr>
+<tr><td>5</td><td><a href="lessons/0005-clientes-web-extensiones-qr.html">Clientes: web, extensiones y QR</a></td><td>Contar el flujo de la extensión y por qué el QR codifica el enlace corto.</td></tr>
+<tr><td>6</td><td><a href="lessons/0006-tests-y-evidencia.html">Tests y evidencia</a></td><td>Nombrar el test que prueba cada requisito.</td></tr>
+<tr><td>7</td><td><a href="lessons/0007-trazabilidad-y-simulacro.html">Trazabilidad y simulacro</a></td><td>Separar consigna / acordado / decidido y responder diez preguntas difíciles.</td></tr>
+</table></div>
+
+<h2>Referencia</h2>
+<p><a href="reference/mapa-del-codigo.html">Mapa del código</a>: todas las piezas con su capa, qué hacen y su origen.
+Se puede imprimir para el repaso final.</p>
+
+<p><span class="tag c">C</span> consigna · <span class="tag q">Q#</span> acuerdo de la elucidación (Q1–Q26) ·
+<span class="tag t">T</span> decisión técnica / ADR</p>
+
+<h2>Fuentes</h2>
+<ul>
+  <li>Código y documentación: <a href="https://github.com/SpendIce/PP6-TPIntegrador">SpendIce/PP6-TPIntegrador</a>
+  (rama <code>main</code>, que incluye la migración a Gradle y el perfil HSQLDB del PR #14).</li>
+  <li>Consigna: <a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/TP_PP6_v1.0.md"><code>TP_PP6_v1.0.md</code></a>.
+  No menciona el coloquio: el formato hay que confirmarlo con el profe.</li>
+  <li>Las fuentes externas (RFC 9110, PostgreSQL, Cockburn, Fowler, Chrome/MDN) están citadas en cada lección.</li>
+</ul>
+
+<p class="nota">Material de estudio generado con asistencia de IA a partir del repo, y verificado contra el código.
+Si algo no coincide con el código, manda el código: avisá.</p>
+
+</main>
+</body>
+</html>
