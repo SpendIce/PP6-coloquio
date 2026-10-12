@@ -114,12 +114,16 @@ Después comparan con la respuesta modelo y cambian de rol. Lo que ninguno de lo
 <section class="ejercicio oral" data-segundos="60">
   <p class="pregunta">4. «El ADR dice PostgreSQL y acordaron Maven. ¿Por qué hay HSQLDB y Gradle?»</p>
   <details class="modelo"><summary>Respuesta modelo</summary>
-  <p>«Fue un cambio posterior (PR #14), hecho con un agente en la nube a pedido mío, para
-  <em>[completá tu motivo real: por ejemplo, levantarlo sin Docker]</em>. PostgreSQL sigue siendo el motor principal
-  y el de todos los tests. HSQLDB es un perfil opcional, sin tests automáticos, y su esquema se mantiene aparte
-  porque ahí Flyway está desactivado. Es una deuda reconocida: el ADR 0004 todavía no lo menciona, y el PR dice que
-  Flyway no soporta HSQLDB, cuando existe el módulo <code>flyway-database-hsqldb</code>.»</p>
-  <p class="nota">Antes del martes, lo ideal es actualizar el ADR o el documento de acuerdos. Decime y lo preparo.</p></details>
+  <p>«Lo pidió usted el 7 de octubre: que pasáramos el build a Gradle con el wrapper en el repo, para poder
+  correrlo sin tocar nada, y que, si podíamos, funcionara con HSQLDB para no montar Docker. Elegimos Gradle porque
+  fue su primera opción; la alternativa era subir el wrapper de Maven. PostgreSQL sigue siendo el motor por defecto y
+  el de todos los tests. HSQLDB es un perfil opcional con el datasource que usted nos pasó. Quedó registrado en el
+  ADR 0005, y los ADR 0001 y 0004 lo referencian. Lo débil: el perfil no tiene tests automáticos y su esquema se
+  mantiene a mano en <code>schema.sql</code>, porque ahí Flyway está apagado. Se podría unificar con el módulo
+  <code>flyway-database-hsqldb</code>, pero no lo probamos.»</p>
+  <p class="nota">No repitas que «Flyway 11 no soporta HSQLDB»: el soporte está en un módulo aparte, igual que el de
+  PostgreSQL. Si te pregunta cómo lo hicieron, contá que lo implementó un agente en el PR #14 y que, según el PR,
+  los 95 tests pasan con Gradle.</p></details>
 </section>
 
 <section class="ejercicio oral" data-segundos="60">
@@ -172,8 +176,7 @@ Después comparan con la respuesta modelo y cambian de rol. Lo que ninguno de lo
   <details class="modelo"><summary>Respuesta modelo</summary>
   <p>«No hay HTTPS servido, por decisión (Q16). El OpenAPI está como archivo, sin Swagger UI. En Firefox la extensión
   se instala de forma temporal y se pierde al reiniciar el navegador. El perfil HSQLDB no tiene tests ni migraciones
-  versionadas. Y el documento de acuerdos no distingue qué confirmó usted y qué decidimos nosotros: eso lo estamos
-  corrigiendo.»</p>
+  versionadas: su esquema se mantiene a mano, aparte de las migraciones de PostgreSQL.»</p>
   <p class="nota">Reconocer los límites con nombre y apellido es una señal de calidad, no de debilidad.</p></details>
 </section>
 

@@ -92,8 +92,8 @@ Paquete base: <code>io.github.spendice.linkshortener</code>. Código: <a href="h
 <h2>Build y ejecución <span class="nota">· desde el PR #14</span></h2>
 <div class="tabla-scroll"><table>
 <tr><th>Pieza</th><th>Qué hace</th><th>Origen</th></tr>
-<tr><td><code>build.gradle</code> + <code>gradlew</code></td><td>Build con Gradle (reemplazó a <code>pom.xml</code>). <code>./gradlew test</code>, <code>./gradlew bootRun</code>.</td><td><span class="tag t">T</span> (Q15 decía Maven)</td></tr>
-<tr><td><code>application-hsqldb.yml</code> + <code>db/hsqldb/schema.sql</code></td><td>Perfil sin Docker: <code>./gradlew hsqldbServer</code> + <code>bootRun -Phsqldb</code>. Flyway apagado, <code>ddl-auto: none</code>, sin tests automáticos.</td><td><span class="tag t">T</span> (ADR 0004 no lo menciona)</td></tr>
+<tr><td><code>build.gradle</code> + <code>gradlew</code></td><td>Build con Gradle (reemplazó a <code>pom.xml</code>). <code>./gradlew test</code>, <code>./gradlew bootRun</code>.</td><td><span class="tag q">Docente 7/10</span> ADR 0005 (reemplazó a Maven de Q15)</td></tr>
+<tr><td><code>application-hsqldb.yml</code> + <code>db/hsqldb/schema.sql</code></td><td>Perfil sin Docker: <code>./gradlew hsqldbServer</code> + <code>bootRun -Phsqldb</code>. Flyway apagado, <code>ddl-auto: none</code>, sin tests automáticos.</td><td><span class="tag q">Docente 7/10</span> ADR 0005 (PostgreSQL sigue por defecto)</td></tr>
 </table></div>
 
 <p class="nota">Lecciones:

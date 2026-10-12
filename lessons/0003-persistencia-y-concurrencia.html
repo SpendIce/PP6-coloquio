@@ -90,8 +90,9 @@ si no coinciden, la aplicación no arranca. ¿Por qué así? Porque en las etapa
 
 <h3>Ojo: el perfil HSQLDB (PR #14)</h3>
 
-<p>En GitHub, <code>main</code> ahora usa Gradle y tiene un perfil <code>hsqldb</code> para correr sin Docker
-(<code>./gradlew hsqldbServer</code> + <code>./gradlew bootRun -Phsqldb</code>). En ese perfil:</p>
+<p>El 7/10 el docente pidió pasar el build a Gradle y, si se podía, correr con HSQLDB para no montar Docker
+<span class="tag q">Docente</span> <span class="tag t">ADR 0005</span>. Desde entonces <code>main</code> usa Gradle y tiene
+un perfil <code>hsqldb</code> (<code>./gradlew hsqldbServer</code> + <code>./gradlew bootRun -Phsqldb</code>). En ese perfil:</p>
 
 <pre><code>flyway.enabled: false            el esquema lo crea spring.sql.init con db/hsqldb/schema.sql
 ddl-auto: none                   Hibernate NO valida
@@ -101,11 +102,13 @@ TIMESTAMP (no TIMESTAMPTZ)       VARCHAR(8192) (no TEXT)</code></pre>
 <ul>
   <li><strong>«¿No que el ADR 0004 decía PostgreSQL?»</strong> Sí: PostgreSQL sigue siendo el motor de la
   app y de <em>todos</em> los tests (Testcontainers). HSQLDB es una comodidad para levantar el servicio sin Docker,
-  <strong>sin tests automáticos</strong>. El ADR no se actualizó para mencionarlo.</li>
+  <strong>sin tests automáticos</strong>, que agregamos porque usted lo pidió. Está registrado en el ADR 0005, y el
+  ADR 0004 lo referencia.</li>
   <li><strong>«¿Por qué no Flyway en HSQLDB?»</strong> El PR dice que «Flyway 11 eliminó el soporte de HSQLDB».
-  <strong>Esto está en duda:</strong> en Maven Central existe <code>org.flywaydb:flyway-database-hsqldb</code>,
-  publicado hasta la 11.8.2. Es probable que solo faltara agregar ese módulo, como ya se hizo con
-  <code>flyway-database-postgresql</code>. No lo probé. Si te lo preguntan, la respuesta honesta es que
+  <strong>No es exacto:</strong> desde Flyway 10 cada motor va en un módulo aparte, y
+  <code>org.flywaydb:flyway-database-hsqldb</code> está publicado en la 11.7.2, la misma versión de Flyway que trae
+  Spring Boot 3.5.16. Probablemente solo faltaba agregar ese módulo, como ya se hizo con
+  <code>flyway-database-postgresql</code>, pero no lo probamos. Si te lo preguntan, la respuesta honesta es que
   hay dos fuentes del esquema (las migraciones y <code>schema.sql</code>) que se mantienen a mano, y que unificarlas
   es una mejora pendiente.</li>
 </ul>
