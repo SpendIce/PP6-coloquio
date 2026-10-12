@@ -176,6 +176,57 @@ alguien podría modificar una asignación del historial, y no se podría testear
 framework a todo el sistema». Aceptó a cambio más disciplina al principio. El precio concreto son los dos
 métodos de traducción: el constructor de la entidad y <code>toDomain</code>.</p>
 
+<h3>¿Y si hubiera dos adaptadores? Quién elige</h3>
+
+<p>Es la repregunta natural, y la respuesta intuitiva («lo elige el controller» o «un endpoint por adaptador»)
+es incorrecta. Mirá qué recibe cada controller en el código:</p>
+<pre><code>LinkApiController(CreateLink createLink, ShortenerProperties properties)
+RedirectController(ResolveLink resolveLink)</code></pre>
+<p><strong>Ninguno conoce <code>AliasStore</code></strong>: solo ven el caso de uso. Si el controller eligiera el
+adaptador, quedarían acoplados dos adaptadores que hoy no se conocen. Y con un endpoint por adaptador, el
+<em>cliente</em> decidiría dónde se guardan los datos. Los endpoints dicen <strong>qué hace</strong> la aplicación,
+no <strong>cómo</strong> lo hace por dentro.</p>
+
+<p>Lo decide quien arma los objetos, el <em>composition root</em>. En el TP es <code>DomainConfig</code> junto con
+Spring, y la elección se hace <strong>una vez, al arrancar</strong>:</p>
+<pre><code>@Bean
+CreateLink createLink(..., AliasStore aliases, AssignmentStore assignments, Clock clock) {
+    return new CreateLink(..., aliases, assignments, clock);
+}</code></pre>
+<p>Spring busca un bean de tipo <code>AliasStore</code>, encuentra uno solo (<code>JpaAliasStore</code>, que es
+<code>@Component</code>) y lo inyecta. Si hubiera dos <code>@Component</code> que implementan
+<code>AliasStore</code>, la aplicación <strong>no arrancaría</strong>: Spring corta con un error parecido a
+<em>«required a single bean, but 2 were found»</em>. Te obliga a elegir explícitamente:</p>
+
+<div class="tabla-scroll"><table>
+<tr><th>Forma</th><th>Cuándo conviene</th><th>Costo</th></tr>
+<tr><td><code>@Profile</code> en cada adaptador</td><td>Uno por entorno (producción, demo)</td><td>Se elige al arrancar, no en caliente</td></tr>
+<tr><td><code>@ConditionalOnProperty</code></td><td>Elegir con una propiedad del <code>application.yml</code></td><td>Igual que el anterior, con más configuración</td></tr>
+<tr><td><code>@Primary</code></td><td>Uno por defecto, que otro pisa en casos puntuales</td><td>Si te olvidás de que existe, sorprende</td></tr>
+<tr><td><code>@Qualifier</code> o <code>new</code> en <code>DomainConfig</code></td><td>Dos casos de uso que necesitan adaptadores distintos a la vez</td><td>Más cableado manual</td></tr>
+<tr><td>Un tercer adaptador que delega</td><td>Elegir en cada request (por ejemplo, caché más base)</td><td>Más complejo; casi nunca hace falta</td></tr>
+</table></div>
+<p>Incluso en el último caso, la decisión queda en infraestructura, <strong>detrás del puerto</strong>:
+<code>CreateLink</code> sigue viendo un solo <code>AliasStore</code>.</p>
+
+<p><strong>El TP ya lo hace en dos lugares.</strong>
+<a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/src/test/java/io/github/spendice/linkshortener/ClockTestConfiguration.java"><code>ClockTestConfiguration</code></a>
+declara un <code>MutableClock</code> con <code>@Primary</code>. Así los tests de integración reemplazan
+<code>Clock.systemUTC()</code> por un reloj que pueden adelantar, sin tocar <code>CreateLink</code> ni los
+controllers. Y <code>CreateLinkTest</code> ni usa Spring: hace <code>new CreateLink(…, new FakeAliasStore(…), …)</code>,
+así que ahí el composition root es el propio test.</p>
+
+<p class="nota">Ojo con el perfil <code>hsqldb</code> del PR #14: <strong>no</strong> es un segundo adaptador. Sigue siendo
+<code>JpaAliasStore</code>; el perfil solo cambia la base a la que se conecta (<code>application-hsqldb.yml</code>).</p>
+
+<p>Donde la intuición de «varias puertas que llaman a lo mismo» sí acierta es del <strong>otro lado</strong> del
+hexágono. Los controllers también son adaptadores, pero de <em>entrada</em>: llaman a la aplicación. Ahí tener
+varios es normal. Lo que no se hace es que la entrada elija la salida:</p>
+<pre><code> ENTRADA (eligen QUÉ hacer)                            SALIDA (resuelven CÓMO)
+ LinkApiController ─┐                             ┌─► JpaAliasStore
+ un CLI (hipotético)┼─► CreateLink ─► AliasStore ─┤
+ CreateLinkTest ────┘                             └─► FakeAliasStore</code></pre>
+
 <h2>3. Recorrido de creación</h2>
 
 <p>El usuario toca <em>Acortar</em> en la web o abre el popup de la extensión. Los dos mandan el mismo
@@ -339,6 +390,54 @@ equivocarte acá es gratis.</p>
   <p class="devolucion" data-op="a" hidden>✔ <code>CreateLink</code> depende de la interfaz <code>AliasStore</code> y recibe la implementación por el constructor. Producción le pasa la de JPA y el test le pasa la del <code>HashMap</code>.</p>
   <p class="devolucion" data-op="b" hidden>✘ <code>CreateLink</code> no sabe que lo están testeando. Esa es justamente la ventaja del puerto.</p>
   <p class="devolucion" data-op="c" hidden>✘ <code>CreateLinkTest</code> ni siquiera levanta Spring: construye <code>CreateLink</code> con <code>new</code>.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">Hay dos adaptadores de <code>AliasStore</code>. ¿Quién decide cuál recibe <code>CreateLink</code>?</p>
+  <div class="opciones">
+    <button data-op="a"><code>LinkApiController</code>, en cada request</button>
+    <button data-op="b"><code>DomainConfig</code> y Spring, al arrancar</button>
+    <button data-op="c">El cliente, según el endpoint que llama</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ El controller solo recibe <code>CreateLink</code>; ni sabe que existe <code>AliasStore</code>. Si eligiera, el adaptador HTTP quedaría acoplado al de persistencia.</p>
+  <p class="devolucion" data-op="b" hidden>✔ Es el <em>composition root</em>: <code>createLink(…, AliasStore aliases, …)</code> le pide a Spring un <code>AliasStore</code>, y Spring resuelve cuál, una sola vez.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Los endpoints dicen qué hace la aplicación, no cómo guarda. A quien usa el acortador no le importa dónde quedan los datos.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">Agregás otro <code>@Component</code> que implementa <code>AliasStore</code> y no tocás nada más. ¿Qué pasa?</p>
+  <div class="opciones">
+    <button data-op="a">La aplicación no arranca</button>
+    <button data-op="b">Spring usa el último que encuentra</button>
+    <button data-op="c">Cada request usa uno distinto</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Spring encuentra dos candidatos para un parámetro que pide uno solo y corta el arranque. Hay que elegir con <code>@Profile</code>, <code>@Primary</code>, <code>@ConditionalOnProperty</code> o <code>@Qualifier</code>.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Spring no elige por orden: ante la ambigüedad, falla. Mejor así: un error al arrancar es mucho más fácil de ver que un comportamiento al azar.</p>
+  <p class="devolucion" data-op="c" hidden>✘ La inyección pasa una vez, al construir <code>CreateLink</code>. Para elegir en cada request haría falta un tercer adaptador que delegue.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="c">
+  <p class="pregunta">¿Cómo reemplazan los tests de integración el reloj del sistema?</p>
+  <div class="opciones">
+    <button data-op="a">Con un endpoint de test que fija la hora</button>
+    <button data-op="b">Con un <code>if</code> en <code>CreateLink</code></button>
+    <button data-op="c">Con un bean <code>@Primary</code> en <code>ClockTestConfiguration</code></button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ No hay endpoints de test. El cambio se hace en la configuración, sin tocar la API.</p>
+  <p class="devolucion" data-op="b" hidden>✘ <code>CreateLink</code> no sabe que lo testean: recibe un <code>Clock</code> y lo usa.</p>
+  <p class="devolucion" data-op="c" hidden>✔ <code>MutableClock</code> pisa a <code>Clock.systemUTC()</code> porque es <code>@Primary</code>. Es la misma técnica que usarías con dos adaptadores de un puerto.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Qué es el perfil <code>hsqldb</code> del PR #14?</p>
+  <div class="opciones">
+    <button data-op="a">El mismo adaptador JPA contra otra base</button>
+    <button data-op="b">Un segundo adaptador de <code>AliasStore</code></button>
+    <button data-op="c">Un adaptador de entrada nuevo</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ <code>JpaAliasStore</code> no cambia: el perfil solo cambia el datasource y cómo se crea el esquema.</p>
+  <p class="devolucion" data-op="b" hidden>✘ No hay otra clase que implemente <code>AliasStore</code>. Si el profe lo pregunta, no lo presentes como un adaptador alternativo.</p>
+  <p class="devolucion" data-op="c" hidden>✘ No agrega ningún endpoint ni controller: es configuración de la base.</p>
 </section>
 
 <p class="marcador" data-quiz-marcador></p>
