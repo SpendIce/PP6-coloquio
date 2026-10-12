@@ -37,6 +37,28 @@ mal y si es entendible. Son tres verbos, y cada uno tiene su evidencia:</p>
 final de obra. Si un muro sale torcido, lo hace tirar. Que lo haya levantado una cuadrilla no le quita
 responsabilidad: la firma es suya.</p>
 
+<h3>Quién hizo qué</h3>
+<p>Antes de los detalles, la cadena completa. Cada eslabón tuvo una herramienta distinta y un control distinto:</p>
+<div class="tabla-scroll"><table>
+<tr><th>Etapa</th><th>Quién / con qué</th><th>Qué controlaba</th></tr>
+<tr><td>Elicitar requisitos</td><td>Codex Sol 6.1 con la skill <code>grill-with-docs</code></td>
+<td>La IA <em>interroga</em>; las respuestas las das vos o las consultás con el profe (Q1–Q26). Escribe ADR y glosario a medida que se decide.</td></tr>
+<tr><td>Especificar</td><td>Codex con <code>to-spec</code></td><td>Sintetiza lo hablado en la especificación padre (#1), sin inventar requisitos nuevos.</td></tr>
+<tr><td>Partir el trabajo</td><td>Codex con <code>to-tickets</code></td><td>Tickets chicos #2–#11, cada uno con criterios de aceptación y «Blocked by».</td></tr>
+<tr><td>Implementar</td><td>Subagentes locales de Devin SWE-2 Max, uno por ticket</td><td>Lo acotan el ticket, <code>AGENTS.md</code> y los documentos previos.</td></tr>
+<tr><td>Revisar el código</td><td>Agentes <strong>con contexto limpio</strong>, con las skills <code>code-review</code> y <code>deslop</code></td>
+<td><code>code-review</code> mira dos ejes: ¿respeta los estándares? ¿cumple el ticket? <code>deslop</code> limpia la «basura típica de IA».</td></tr>
+<tr><td>Verificar</td><td><strong>Vos</strong></td><td>El flujo de punta a punta de cada ticket y el sistema real funcionando, incluida la demo física del #12.</td></tr>
+</table></div>
+<p>Dos ideas para defender de esta tabla:</p>
+<ul>
+  <li><strong>Las decisiones son tuyas, no de la IA.</strong> En <code>grill-with-docs</code> la IA pregunta y vos
+  respondés. Por eso la planilla de requisitos dice «Docente» o «Equipo» en cada fila, y nunca «IA».</li>
+  <li><strong>El que revisa no es el que escribió.</strong> Un agente con contexto limpio no carga los supuestos del
+  que implementó: lee el diff, el ticket y los estándares como los leería un compañero que llega de afuera. Pedirle a la
+  misma sesión que se revise a sí misma es como pedirle al albañil que firme su propia inspección.</li>
+</ul>
+
 <h2>1. Acotar: todo lo que estaba escrito antes de la primera línea de código</h2>
 
 <p>El historial de git lo muestra con horario. Todo es del 05/10:</p>
@@ -97,7 +119,10 @@ no puede ignorar sin que se note.</p>
 
 <h3>Red 2 · Revisión contra estándares escritos</h3>
 <p><a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/CODING_STANDARDS.md"><code>CODING_STANDARDS.md</code></a>
-empieza con «cada regla nació de un hallazgo real en la etapa 1». Estos son los errores de la IA que se detectaron:</p>
+empieza con «cada regla nació de un hallazgo real en la etapa 1». Contra ese archivo y contra el ticket revisaban los
+agentes de <code>code-review</code>, y <code>deslop</code> dejaba commits como
+<a href="https://github.com/SpendIce/PP6-TPIntegrador/commit/191a49d">191a49d</a> («quitar variable sin uso,
+comentario redundante y typo»). Estos son los errores de la IA que se detectaron:</p>
 
 <div class="tabla-scroll"><table>
 <tr><th>Qué hizo mal la IA</th><th>Qué se hizo</th></tr>
@@ -117,6 +142,8 @@ empieza con «cada regla nació de un hallazgo real en la etapa 1». Estos son l
 de la IA no lo repita. Eso es acotar con lo que aprendiste al controlar.</p>
 
 <h3>Red 3 · Verificación humana y evidencia</h3>
+<p>Acá entrás vos: recorriste el flujo de punta a punta que describe cada ticket <code>ready-for-agent</code> y
+probaste el sistema real funcionando, no solo que los tests estuvieran en verde. Lo que quedó registrado:</p>
 <ul>
   <li>Una demo automatizada con 73 de 73 chequeos (<code>docs/demo-etapa-1.md</code>).</li>
   <li>Una medición de capacidad con 10 clientes: el p95 de creación fue de 113 ms y el de resolución de 7,5 ms, contra
@@ -159,17 +186,19 @@ señalar:</p>
 </ul>
 
 <div class="control">
-  <strong>Completá vos: esto solo lo sabés vos</strong>
-  <ul>
-    <li>¿Con qué herramientas de IA se hicieron los issues #2 a #11? (El historial solo muestra que los PR #13 y #14 los
-    hizo Devin).</li>
-    <li>¿Quién revisó cada entrega? ¿Leíste los diffs vos, o una segunda IA revisó con <code>CODING_STANDARDS.md</code>
-    y vos decidiste qué se aceptaba?</li>
-    <li>¿Qué verificaste personalmente? Por ejemplo, la demo física del #12 o la respuesta del profe en cada Q.</li>
-  </ul>
-  <p class="nota">Respondelo en voz alta antes del coloquio. Si una respuesta es «no lo revisé», decilo así: es mejor
-  que te lo escuche a vos que encontrarlo él.</p>
+  <strong>La pregunta que más probablemente te haga: «¿Leíste el código?»</strong>
+  <p>La revisión línea por línea la hicieron agentes. Lo que verificaste vos fue el <em>comportamiento</em>: el flujo
+  de cada ticket y el sistema real. Es una división de trabajo defendible, pero tiene un costo: un agente puede aprobar
+  algo que funciona y está mal diseñado, como el <code>@Transactional</code> en la capa de aplicación. No lo escondas.
+  Decilo así:</p>
+  <p class="analogia">«La revisión de código la delegué en agentes con contexto limpio, contra estándares que escribimos
+  nosotros. Yo verifiqué que el sistema hiciera lo que pedía cada ticket. Lo que no hice en ese momento fue leer cada
+  línea, y por eso me preparé para explicarla hoy: pregúnteme cualquier clase.»</p>
+  <p class="nota">La última frase solo funciona si las lecciones 1 a 4 te salen sin leer. Ese es el verdadero examen.</p>
 </div>
+<p class="nota">Ojo con un detalle del historial: los commits del 05/10 no dicen qué herramienta los generó (los PR #13
+y #14, en cambio, llevan la firma de Devin). Si el profe pregunta cómo sabe que fue Devin, la respuesta es «porque lo
+cuento yo»: no hay otra evidencia en git, y no hace falta inventarla.</p>
 
 <hr>
 
@@ -211,6 +240,18 @@ señalar:</p>
   <p class="devolucion" data-op="c" hidden>✘ El problema no era la herramienta, sino que faltaba una regla escrita.</p>
 </section>
 
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">¿Por qué la revisión la hacía un agente con contexto limpio y no el mismo que implementó?</p>
+  <div class="opciones">
+    <button data-op="a">Porque un agente nuevo es más rápido</button>
+    <button data-op="b">Porque no comparte los supuestos del que escribió el código</button>
+    <button data-op="c">Porque el que implementó ya no tenía acceso al repo</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ La velocidad no tiene nada que ver. Lo que importa es la independencia.</p>
+  <p class="devolucion" data-op="b" hidden>✔ Lee el diff, el ticket y los estándares sin la historia de cómo se llegó ahí. Es la misma razón por la que el inspector de obra no es el albañil.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Tenía acceso. Se separó a propósito, para que nadie se apruebe a sí mismo.</p>
+</section>
+
 <section class="ejercicio quiz" data-correcta="a">
   <p class="pregunta">¿Qué parte de la arquitectura NO tiene un control automático?</p>
   <div class="opciones">
@@ -240,29 +281,34 @@ señalar:</p>
 <section class="ejercicio ordenar">
   <p class="pregunta">Ordená cómo se dirigió el trabajo de la etapa 1:</p>
   <ul class="ordenar-lista">
-    <li data-paso="1">Acordar los requisitos con el profe (Q1–Q26)</li>
+    <li data-paso="1">Entrevista guiada con la IA; decidimos o consultamos al profe (Q1–Q26)</li>
     <li data-paso="2">Registrar las decisiones en ADR y el glosario</li>
     <li data-paso="3">Escribir el contrato OpenAPI y la especificación técnica</li>
-    <li data-paso="4">Partir en issues con criterios de aceptación</li>
-    <li data-paso="5">Un agente implementa cada issue con sus tests</li>
-    <li data-paso="6">Revisión contra los estándares y la especificación</li>
-    <li data-paso="7">Verificación humana y evidencia (#12)</li>
+    <li data-paso="4">Partir en tickets con criterios de aceptación (<code>to-tickets</code>)</li>
+    <li data-paso="5">Un agente de Devin implementa cada ticket con sus tests</li>
+    <li data-paso="6">Agentes con contexto limpio revisan contra los estándares y el ticket</li>
+    <li data-paso="7">Verificás el flujo de punta a punta y la demo física (#12)</li>
   </ul>
   <button data-comprobar>Comprobar</button>
-  <p class="devolucion" data-si-ok hidden>✔ Los pasos 1 a 4 son <strong>acotar</strong>, el 5 es lo que hizo la IA y los pasos 6 y 7 son
-  <strong>controlar</strong>. La IA ocupa un solo paso de siete: esa es la imagen que tenés que transmitir.</p>
+  <p class="devolucion" data-si-ok hidden>✔ Los pasos 1 a 4 son <strong>acotar</strong>, el 5 es construir y los pasos 6 y 7 son
+  <strong>controlar</strong>. La IA trabaja en casi todos, pero no decide sola en ninguno: en el 1 pregunta y vos
+  respondés, el 5 está cercado por el ticket, el 6 lo hace otra IA contra reglas de ustedes y el 7 es tuyo. Esa es la
+  imagen que tenés que transmitir.</p>
 </section>
 
 <section class="ejercicio oral" data-segundos="120">
   <p class="pregunta">«¿Cómo acotaron y controlaron lo que hizo la IA?»</p>
   <details class="modelo">
     <summary>Respuesta modelo</summary>
-    <p>«En tres momentos. <strong>Antes</strong> del código escribimos lo que la IA tenía que respetar: los requisitos que
-    consultamos con usted, los ADR con cada decisión, un glosario y el contrato OpenAPI. El historial lo muestra: el primer
+    <p>«En tres momentos. <strong>Antes</strong> del código escribimos lo que la IA tenía que respetar. Con Codex hicimos
+    una entrevista guiada: la IA preguntaba y nosotros decidíamos, o lo consultábamos con usted. De ahí salieron los
+    requisitos, los ADR con cada decisión, un glosario y el contrato OpenAPI. El historial lo muestra: el primer
     código es posterior a todo eso. Después partimos el trabajo en issues chicos con criterios de aceptación y
-    prohibiciones explícitas, y separamos lo que solo podía verificar una persona. <strong>Después</strong> lo controlamos
-    con tres redes: 95 tests de JUnit sobre PostgreSQL real, más los de JavaScript, que traducen cada acuerdo; una
-    revisión contra estándares escritos; y la demo física. Cuando la revisión encontraba un error, como una librería
+    prohibiciones explícitas, y separamos lo que solo podía verificar una persona. Cada ticket lo implementó un agente
+    de Devin. <strong>Después</strong> lo controlamos con tres redes: 95 tests de JUnit sobre PostgreSQL real, más los de
+    JavaScript, que traducen cada acuerdo; una revisión hecha por otros agentes, sin el contexto del que implementó,
+    contra los estándares y contra el ticket; y mi verificación del flujo completo con el sistema real, incluida la demo
+    física. Cuando la revisión encontraba un error, como una librería
     de QR duplicada o un servidor de base expuesto sin contraseña, lo corregíamos y escribíamos la regla para que no se
     repita. Y lo <strong>tercero</strong> es poder explicarlo, que es lo que estoy haciendo ahora.»</p>
     <p class="nota">Chequeá: ¿nombraste algo concreto de cada momento? ¿Diste al menos un error real? Si podés,
@@ -292,6 +338,19 @@ señalar:</p>
     test que falla. El perfil HSQLDB que usted pidió no tiene tests y su esquema está duplicado a mano. Y aunque los
     issues pedían TDD, el historial no permite demostrar que los tests se escribieron primero.»</p>
     <p class="nota">Terminá con lo que harías distinto. Eso transforma una debilidad en criterio.</p>
+  </details>
+</section>
+
+<section class="ejercicio oral" data-segundos="45">
+  <p class="pregunta">«¿Usted leyó este código?»</p>
+  <details class="modelo">
+    <summary>Respuesta modelo</summary>
+    <p>«La revisión línea por línea la delegué en agentes con contexto limpio, contra estándares que escribimos nosotros
+    y contra el ticket. Yo verifiqué el comportamiento: que cada flujo hiciera lo que pedía su ticket, con el sistema
+    real. Lo que no hice en ese momento fue leer cada línea, y por eso me preparé para explicarla hoy. Elija cualquier
+    clase y se la recorro.»</p>
+    <p class="nota">No te defiendas ni pidas perdón: describí la división del trabajo y ofrecé la prueba. Después
+    cumplila: si te dice «<code>CreateLink</code>», tenés que poder recorrerla sin leer.</p>
   </details>
 </section>
 
