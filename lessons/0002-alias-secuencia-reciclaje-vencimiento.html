@@ -9,13 +9,26 @@
 <body>
 <main>
 
-<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 2 de 7 · ~15 minutos</p>
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 2 de 8 · ~15 minutos</p>
 <h1>Alias: secuencia, reciclaje y vencimiento</h1>
 <p class="subtitulo">Qué código recibe la próxima creación, y por qué ese y no otro.</p>
 
 <div class="victoria">
   <strong>Al terminar vas a poder:</strong> mirar el estado de la base (qué alias existen y cuáles
   vencieron) y predecir qué alias recibe la próxima creación, justificándolo con la consigna.
+</div>
+
+<div class="control">
+  <strong>Control de la IA en esta parte</strong>
+  <ul>
+    <li><strong>La regla vino escrita:</strong> el alfabeto, la prioridad por longitud y el desempate determinista estaban
+    en Q19, en Q20 y en los criterios de aceptación del <a href="https://github.com/SpendIce/PP6-TPIntegrador/issues/5">issue #5</a>
+    antes del código. La IA no eligió la política: la implementó.</li>
+    <li><strong>Lo controlan:</strong> <code>AliasSequenceTest</code> (por ejemplo,
+    <code>agotaLos58CodigosDeUnCaracterAntesDePasaraDos</code>), <code>AliasRecyclingTest</code>
+    (<code>laLongitudPesaMasQueElOrdenDelCodigo</code>) y <code>RutasReservadasHttpTest</code>.</li>
+    <li><strong>Pensalo:</strong> si la IA hubiera ordenado los vencidos alfabéticamente y no por longitud, ¿qué test fallaría?</li>
+  </ul>
 </div>
 
 <h2>0. Repaso de la lección 1</h2>

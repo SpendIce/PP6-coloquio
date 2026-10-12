@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lección 8 · Cómo controlamos a la IA</title>
+<link rel="stylesheet" href="../assets/curso.css">
+</head>
+<body>
+<main>
+
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 8 de 8 · ~25 minutos</p>
+<h1>Cómo acotamos y controlamos a la IA</h1>
+<p class="subtitulo">La pregunta de fondo del coloquio no es «¿funciona?» sino «¿ustedes dirigieron a la IA, o la IA
+los dirigió a ustedes?».</p>
+
+<div class="victoria">
+  <strong>Al terminar vas a poder:</strong> explicar en dos minutos cómo acotaron a la IA <em>antes</em> del código y cómo
+  la controlaron <em>después</em>, contar tres errores concretos que le detectaron y reconocer lo que no controlaron.
+  Todo con evidencia que se puede abrir en el repo delante del profe.
+</div>
+
+<h2>0. Qué va a mirar el profe</h2>
+
+<p>El profe adelantó el formato: quiere que le expliquen cómo está hecha cada parte, sobre todo el
+<strong>backend</strong>, y ver si pudieron <strong>acotar y controlar lo que hizo la IA</strong>: si está bien, si está
+mal y si es entendible. Son tres verbos, y cada uno tiene su evidencia:</p>
+
+<div class="tabla-scroll"><table>
+<tr><th>Verbo</th><th>Cuándo</th><th>Qué lo prueba</th></tr>
+<tr><td><strong>Acotar</strong></td><td>Antes del código</td><td>Requisitos Q1–Q26, ADR, glosario, OpenAPI e issues con criterios de aceptación</td></tr>
+<tr><td><strong>Controlar</strong></td><td>Después del código</td><td>136 tests, revisión contra estándares escritos y verificación humana</td></tr>
+<tr><td><strong>Entender</strong></td><td>En el coloquio</td><td>Que <em>vos</em> lo expliques sin leer: lecciones 1 a 6</td></tr>
+</table></div>
+
+<p class="analogia">En una obra, el director no pone ladrillos. Hace los planos antes, inspecciona durante y firma el
+final de obra. Si un muro sale torcido, lo hace tirar. Que lo haya levantado una cuadrilla no le quita
+responsabilidad: la firma es suya.</p>
+
+<h2>1. Acotar: todo lo que estaba escrito antes de la primera línea de código</h2>
+
+<p>El historial de git lo muestra con horario. Todo es del 05/10:</p>
+<pre><code>09:52  chore: configure engineering skills and GitHub issue tracker   ← instrucciones para agentes
+10:31  docs: agregar glosario, ADRs y requisitos de etapa 1            ← qué se construye y por qué
+10:45  docs: agregar contrato OpenAPI y especificación técnica         ← cómo se ve desde afuera
+11:05  feat: dominio, casos de uso, adaptadores JPA/HTTP y web …       ← recién acá, el código</code></pre>
+<p>Lo podés mostrar en vivo con
+<code>git log --reverse --format='%ad %s' --date=format:'%d/%m %H:%M' | head -4</code>.</p>
+
+<h3>Qué escribieron ustedes y qué acotaba cada cosa</h3>
+<ul>
+  <li><a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/docs/requisitos-etapa-1.md"><strong>Requisitos Q1–Q26</strong></a>:
+  las reglas de negocio, consultadas con el profe o decididas por el equipo. La IA no inventó la política de alias ni
+  el vencimiento: los recibió escritos.</li>
+  <li><a href="https://github.com/SpendIce/PP6-TPIntegrador/tree/main/docs/adr"><strong>ADR 0001–0005</strong></a>:
+  las decisiones de arquitectura con su porqué, como el monolito modular, el alias reutilizable, el historial y PostgreSQL.</li>
+  <li><a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/CONTEXT.md"><strong>Glosario</strong></a>:
+  obliga a que el código use «alias», «asignación» y «vencimiento». Por eso las clases se llaman <code>Alias</code> y
+  <code>Assignment</code>, y no <code>Link</code> o <code>Url</code>.</li>
+  <li><a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/openapi.yaml"><strong>Contrato OpenAPI</strong></a>:
+  fija los códigos 201, 302, 400 y 404 y la forma exacta del JSON antes de que exista un controller.</li>
+  <li><a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/AGENTS.md"><strong>AGENTS.md</strong></a>:
+  instrucciones para cualquier agente que entre al repo. Indica que lea el glosario y los ADR antes de diseñar, que
+  revise contra <code>CODING_STANDARDS.md</code> y con qué comandos se verifica.</li>
+</ul>
+
+<h3>Issues chicos, con cerco</h3>
+<p>El trabajo se partió en una especificación padre
+(<a href="https://github.com/SpendIce/PP6-TPIntegrador/issues/1">#1</a>, con historias de usuario) y diez tickets,
+del #2 al #11, marcados <code>ready-for-agent</code>. Cada uno trae <strong>criterios de aceptación</strong>,
+<strong>dependencias</strong> («Blocked by #3») y <strong>prohibiciones explícitas</strong>. Por ejemplo, el
+<a href="https://github.com/SpendIce/PP6-TPIntegrador/issues/5">#5</a> (reciclaje) dice:</p>
+<pre><code>- Reutilizar un alias vencido antes de generar un código nunca usado,
+  priorizando entre los vencidos los de menor longitud; documentar un
+  desempate determinista si se utiliza.
+- …
+- No agregar una consola pública ni registrar visitas para verificar el
+  historial, y no ejecutar builds después de cambios.</code></pre>
+<p>Y hay un ticket distinto: el <a href="https://github.com/SpendIce/PP6-TPIntegrador/issues/12">#12</a> es
+<code>ready-for-human</code>. Reúne lo que «ningún agente puede ejecutar»: instalar los complementos en navegadores
+reales, hacer clics y escanear el QR con un celular. Separar qué puede hacer la IA y qué tiene que hacer una persona
+<strong>es</strong> acotar.</p>
+
+<h2>2. Controlar: tres redes para atrapar errores</h2>
+
+<h3>Red 1 · Tests que traducen los requisitos</h3>
+<p>Hay 95 tests de JUnit y 41 de Node. Los <code>*HttpTest</code> corren contra PostgreSQL real (Testcontainers), con
+un reloj que se puede adelantar. Casi cada acuerdo tiene un test con nombre propio:</p>
+<pre><code>Q1/Q10  antesDelVencimientoRedirigeYAlAlcanzarloDejaDeResolver   VencimientoHttpTest
+Q11     aliasVencidoDevuelveElMismo404                           LinkApiHttpTest
+Q19     competicionPorUnAliasVencidoLoObtieneExactamenteUnaCreacion  ConcurrenciaHttpTest
+Q20     elGeneradorNuncaEmiteLosCodigosReservadosNiAlCruzarDeLongitud RutasReservadasHttpTest
+Q21     reintentarLaCreacionTrasPerderLaRespuestaProduceOtraAsignacion ConcurrenciaHttpTest</code></pre>
+<p>Si mañana la IA cambiara la duración a 30 minutos por error, <code>VencimientoHttpTest</code> fallaría, porque fija
+<code>Duration.ofMinutes(60)</code>. Así funciona el control: el requisito queda escrito como un test que la IA
+no puede ignorar sin que se note.</p>
+
+<h3>Red 2 · Revisión contra estándares escritos</h3>
+<p><a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/CODING_STANDARDS.md"><code>CODING_STANDARDS.md</code></a>
+empieza con «cada regla nació de un hallazgo real en la etapa 1». Estos son los errores de la IA que se detectaron:</p>
+
+<div class="tabla-scroll"><table>
+<tr><th>Qué hizo mal la IA</th><th>Qué se hizo</th></tr>
+<tr><td>En las extensiones metió una <strong>segunda librería de QR</strong> y un encoder PNG propio, duplicando lo que ya tenía la web.</td>
+<td>Se unificó en un solo stack (<a href="https://github.com/SpendIce/PP6-TPIntegrador/commit/a4955fe">a4955fe</a>) y se escribió la regla «una sola implementación por capacidad».</td></tr>
+<tr><td><strong>Copió textualmente</strong> la infraestructura de los tests HTTP en dos suites, y las dos ya empezaban a divergir en <code>assertError</code>.</td>
+<td>Se extrajo <code>HttpApiFixture</code> (<a href="https://github.com/SpendIce/PP6-TPIntegrador/commit/640d8d5">640d8d5</a>) y se escribió la regla «las suites HTTP extienden el fixture».</td></tr>
+<tr><td>En el QR dejó una data URL sin uso y <strong>no liberaba los blobs</strong> de la descarga.</td>
+<td>Limpieza de revisión (<a href="https://github.com/SpendIce/PP6-TPIntegrador/commit/5527682">5527682</a>).</td></tr>
+<tr><td>En el PR #14 el servidor HSQLDB escuchaba en <strong>todas las interfaces de red con usuario <code>sa</code> sin contraseña</strong>.</td>
+<td>Hallazgo de revisión: ahora escucha solo en <code>127.0.0.1</code> (<a href="https://github.com/SpendIce/PP6-TPIntegrador/commit/de7ae96">de7ae96</a>).</td></tr>
+<tr><td>En el mismo PR afirmó que <strong>«Flyway 11 no soporta HSQLDB»</strong>. Es falso: el soporte está en un módulo aparte.</td>
+<td>Se verificó en Maven Central y quedó corregido en el <a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/docs/adr/0005-gradle-y-perfil-hsqldb.md">ADR 0005</a>.</td></tr>
+</table></div>
+
+<p>Fijate el patrón: no alcanza con corregir el error. <strong>Se escribe la regla</strong> para que la próxima sesión
+de la IA no lo repita. Eso es acotar con lo que aprendiste al controlar.</p>
+
+<h3>Red 3 · Verificación humana y evidencia</h3>
+<ul>
+  <li>Una demo automatizada con 73 de 73 chequeos (<code>docs/demo-etapa-1.md</code>).</li>
+  <li>Una medición de capacidad con 10 clientes: el p95 de creación fue de 113 ms y el de resolución de 7,5 ms, contra
+  el objetivo de 1 s (<code>docs/evidencia-capacidad.md</code>).</li>
+  <li>La demo física del #12, con capturas por paso en <code>docs/evidencia-demo/manual/</code>.</li>
+  <li>La regla de los estándares: «queda verificado a mano» solo vale para pasos que requieren a una persona. Todo lo
+  demás necesita un test.</li>
+</ul>
+
+<h2>3. Entender: lo que nadie puede hacer por vos</h2>
+
+<p>«Si es entendible» se mide con tu explicación. Por eso hay lecciones 1 a 6. Igual, el código ayuda, y lo podés
+señalar:</p>
+<ul>
+  <li><strong>Vocabulario único:</strong> el mismo término en la consigna, en el glosario, en las clases y en los tests.</li>
+  <li><strong>Comentarios que explican el porqué</strong> y no el qué. Por ejemplo, el Javadoc de los puertos.</li>
+  <li><strong>Capas que el compilador hace cumplir:</strong> los adaptadores JPA no son <code>public</code>. Además, el
+  dominio no importa nada de Spring, y lo podés probar en vivo con
+  <code>rg 'import org.springframework' src/main/java/io/github/spendice/linkshortener/domain</code>, que no
+  devuelve nada.</li>
+</ul>
+
+<h2>4. Lo que no controlamos (decilo antes de que te lo encuentren)</h2>
+
+<p>Reconocer los límites con evidencia suma más que fingir que todo está perfecto. Estos son reales:</p>
+<ul>
+  <li><strong>Spring se filtró a la capa de aplicación.</strong> <code>CreateLink</code> y <code>ResolveLink</code>
+  importan <code>@Transactional</code> de Spring. El dominio está limpio, la aplicación no del todo. Fue lo pragmático
+  (una anotación contra un decorador transaccional en infraestructura), pero es una concesión.</li>
+  <li><strong>No hay un test automático de arquitectura.</strong> La regla de capas se sostiene con la visibilidad de
+  paquete y con la revisión. Una herramienta como ArchUnit la volvería un test que falla.</li>
+  <li><strong>El perfil HSQLDB no tiene tests</strong>, y su esquema está duplicado a mano en <code>schema.sql</code>.</li>
+  <li><strong>Los issues pedían TDD estricto, pero el historial no lo prueba</strong>: los commits de
+  <code>feat</code> y de <code>test</code> tienen el mismo minuto. No digas «hicimos TDD». Decí «lo pedimos y los tests
+  existen, pero no puedo demostrar que se escribieron primero».</li>
+  <li><strong>La velocidad.</strong> El código de la etapa 1 se commiteó entre las 11:05 y las 15:10 del 05/10, con
+  varios agentes trabajando en paralelo, un issue cada uno. El profe lo puede ver en el historial. La respuesta
+  honesta: la velocidad es de la IA; el control estuvo en lo que se escribió antes y en lo que se verificó después.
+  Y lo que faltaba (entender el detalle) es justamente lo que preparamos para hoy.</li>
+</ul>
+
+<div class="control">
+  <strong>Completá vos: esto solo lo sabés vos</strong>
+  <ul>
+    <li>¿Con qué herramientas de IA se hicieron los issues #2 a #11? (El historial solo muestra que los PR #13 y #14 los
+    hizo Devin).</li>
+    <li>¿Quién revisó cada entrega? ¿Leíste los diffs vos, o una segunda IA revisó con <code>CODING_STANDARDS.md</code>
+    y vos decidiste qué se aceptaba?</li>
+    <li>¿Qué verificaste personalmente? Por ejemplo, la demo física del #12 o la respuesta del profe en cada Q.</li>
+  </ul>
+  <p class="nota">Respondelo en voz alta antes del coloquio. Si una respuesta es «no lo revisé», decilo así: es mejor
+  que te lo escuche a vos que encontrarlo él.</p>
+</div>
+
+<hr>
+
+<h2>5. Practicá</h2>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Qué estaba en el repo antes del primer commit de código?</p>
+  <div class="opciones">
+    <button data-op="a">Glosario, ADR, requisitos, OpenAPI y especificación</button>
+    <button data-op="b">Solo la consigna del TP y el README</button>
+    <button data-op="c">El dominio y sus tests unitarios</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ A las 10:31 y a las 10:45 del 05/10; el primer <code>feat</code> es de las 11:05. Se muestra con <code>git log --reverse</code>.</p>
+  <p class="devolucion" data-op="b" hidden>✘ El historial muestra cinco tipos de documento antes del código. Ese orden es tu mejor argumento de «acotar».</p>
+  <p class="devolucion" data-op="c" hidden>✘ El dominio llega en el primer <code>feat</code>, a las 11:05, después de la especificación.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Por qué el issue #12 está marcado <code>ready-for-human</code>?</p>
+  <div class="opciones">
+    <button data-op="a">Son pasos que solo una persona puede verificar</button>
+    <button data-op="b">El agente falló y hubo que rehacerlo</button>
+    <button data-op="c">El profe pidió hacerlo durante la clase</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Instalar complementos en navegadores reales, hacer clics y escanear el QR con un celular. Separar qué hace la IA y qué hace una persona es parte de acotar.</p>
+  <p class="devolucion" data-op="b" hidden>✘ El issue lo dice: «la evidencia física que ningún agente puede ejecutar». Lo automatizable ya estaba verificado (73 de 73).</p>
+  <p class="devolucion" data-op="c" hidden>✘ Nació porque los tickets #8 y #11 se cerraron dejando esos pasos físicos como pendiente explícito.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">La IA duplicó la librería de QR en las extensiones. ¿Qué se hizo además de unificarla?</p>
+  <div class="opciones">
+    <button data-op="a">Nada más: con borrar la copia alcanzaba</button>
+    <button data-op="b">Se escribió una regla en <code>CODING_STANDARDS.md</code></button>
+    <button data-op="c">Se cambió de herramienta de IA</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ Si solo corregís, la próxima sesión de la IA puede repetir el error. La regla es lo que lo evita.</p>
+  <p class="devolucion" data-op="b" hidden>✔ «Una sola implementación por capacidad». Cada regla de ese archivo nació de un hallazgo real.</p>
+  <p class="devolucion" data-op="c" hidden>✘ El problema no era la herramienta, sino que faltaba una regla escrita.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Qué parte de la arquitectura NO tiene un control automático?</p>
+  <div class="opciones">
+    <button data-op="a">Las dependencias entre capas</button>
+    <button data-op="b">El vencimiento exacto de 60 minutos</button>
+    <button data-op="c">Que no se repitan alias vigentes</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ No hay ArchUnit. La regla se sostiene con la visibilidad de paquete y la revisión, y de hecho <code>@Transactional</code> de Spring entró en la capa de aplicación.</p>
+  <p class="devolucion" data-op="b" hidden>✘ <code>VencimientoHttpTest</code> lo prueba con un reloj controlable, en el instante exacto del vencimiento.</p>
+  <p class="devolucion" data-op="c" hidden>✘ <code>ConcurrenciaHttpTest</code> lo prueba con creaciones simultáneas sobre PostgreSQL real.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">El profe ve que todo el código de la etapa 1 se commiteó en una tarde. ¿Qué respondés?</p>
+  <div class="opciones">
+    <button data-op="a">Lo generaron agentes en paralelo; el control estuvo antes y después</button>
+    <button data-op="b">Lo veníamos escribiendo y lo subimos todo junto</button>
+    <button data-op="c">Las fechas de git no son confiables</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Es la verdad, y se defiende con evidencia: la especificación previa, los criterios de aceptación, los tests y la revisión.</p>
+  <p class="devolucion" data-op="b" hidden>✘ Es falso, y el historial (issue por issue, merges con horario) lo desmiente. Una mentira detectada invalida todo lo demás.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Suena a excusa, y las fechas son coherentes con los PR de GitHub. No vale la pena.</p>
+</section>
+
+<p class="marcador" data-quiz-marcador></p>
+
+<section class="ejercicio ordenar">
+  <p class="pregunta">Ordená cómo se dirigió el trabajo de la etapa 1:</p>
+  <ul class="ordenar-lista">
+    <li data-paso="1">Acordar los requisitos con el profe (Q1–Q26)</li>
+    <li data-paso="2">Registrar las decisiones en ADR y el glosario</li>
+    <li data-paso="3">Escribir el contrato OpenAPI y la especificación técnica</li>
+    <li data-paso="4">Partir en issues con criterios de aceptación</li>
+    <li data-paso="5">Un agente implementa cada issue con sus tests</li>
+    <li data-paso="6">Revisión contra los estándares y la especificación</li>
+    <li data-paso="7">Verificación humana y evidencia (#12)</li>
+  </ul>
+  <button data-comprobar>Comprobar</button>
+  <p class="devolucion" data-si-ok hidden>✔ Los pasos 1 a 4 son <strong>acotar</strong>, el 5 es lo que hizo la IA y los pasos 6 y 7 son
+  <strong>controlar</strong>. La IA ocupa un solo paso de siete: esa es la imagen que tenés que transmitir.</p>
+</section>
+
+<section class="ejercicio oral" data-segundos="120">
+  <p class="pregunta">«¿Cómo acotaron y controlaron lo que hizo la IA?»</p>
+  <details class="modelo">
+    <summary>Respuesta modelo</summary>
+    <p>«En tres momentos. <strong>Antes</strong> del código escribimos lo que la IA tenía que respetar: los requisitos que
+    consultamos con usted, los ADR con cada decisión, un glosario y el contrato OpenAPI. El historial lo muestra: el primer
+    código es posterior a todo eso. Después partimos el trabajo en issues chicos con criterios de aceptación y
+    prohibiciones explícitas, y separamos lo que solo podía verificar una persona. <strong>Después</strong> lo controlamos
+    con tres redes: 95 tests de JUnit sobre PostgreSQL real, más los de JavaScript, que traducen cada acuerdo; una
+    revisión contra estándares escritos; y la demo física. Cuando la revisión encontraba un error, como una librería
+    de QR duplicada o un servidor de base expuesto sin contraseña, lo corregíamos y escribíamos la regla para que no se
+    repita. Y lo <strong>tercero</strong> es poder explicarlo, que es lo que estoy haciendo ahora.»</p>
+    <p class="nota">Chequeá: ¿nombraste algo concreto de cada momento? ¿Diste al menos un error real? Si podés,
+    señalá el <code>git log</code> o un issue mientras hablás.</p>
+  </details>
+</section>
+
+<section class="ejercicio oral" data-segundos="60">
+  <p class="pregunta">«Contame un error que cometió la IA y cómo lo detectaron.»</p>
+  <details class="modelo">
+    <summary>Respuesta modelo</summary>
+    <p>«En el PR del cambio a Gradle, el agente dejó el servidor HSQLDB escuchando en todas las interfaces de red,
+    con usuario <code>sa</code> y sin contraseña: cualquiera en la red podía entrar a la base. Salió en la revisión y
+    se limitó a <code>127.0.0.1</code>. En el mismo PR afirmó que Flyway 11 no soporta HSQLDB. Lo verificamos y es falso:
+    el soporte está en un módulo aparte, publicado para la versión que usamos. Lo corregimos en el ADR 0005. La
+    lección es que la IA escribe con la misma seguridad cuando acierta y cuando se equivoca.»</p>
+    <p class="nota">Elegí un error que puedas mostrar (commit o ADR) y que entiendas de punta a punta.</p>
+  </details>
+</section>
+
+<section class="ejercicio oral" data-segundos="60">
+  <p class="pregunta">«¿Qué no controlaron bien?»</p>
+  <details class="modelo">
+    <summary>Respuesta modelo</summary>
+    <p>«Tres cosas. La regla de capas no tiene un test automático: el dominio está limpio, pero los casos de uso
+    importan <code>@Transactional</code> de Spring, y eso pasó la revisión. Con ArchUnit se habría convertido en un
+    test que falla. El perfil HSQLDB que usted pidió no tiene tests y su esquema está duplicado a mano. Y aunque los
+    issues pedían TDD, el historial no permite demostrar que los tests se escribieron primero.»</p>
+    <p class="nota">Terminá con lo que harías distinto. Eso transforma una debilidad en criterio.</p>
+  </details>
+</section>
+
+<hr>
+
+<h2>Para leer</h2>
+<p><strong>Fuente primaria:</strong> el propio repo. Abrí antes del coloquio el
+<a href="https://github.com/SpendIce/PP6-TPIntegrador/issues/5">issue #5</a>,
+<a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/CODING_STANDARDS.md"><code>CODING_STANDARDS.md</code></a> y
+<a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/AGENTS.md"><code>AGENTS.md</code></a>: son cortos, y
+tenerlos frescos te permite mostrarlos en vez de describirlos.</p>
+
+<p>← <a href="0007-trazabilidad-y-simulacro.html">Lección 7</a> · <a href="../index.html">Inicio del curso</a></p>
+
+</main>
+<script src="../assets/quiz.js"></script>
+<script src="../assets/ordenar.js"></script>
+<script src="../assets/oral.js"></script>
+</body>
+</html>

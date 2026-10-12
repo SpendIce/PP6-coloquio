@@ -9,7 +9,7 @@
 <body>
 <main>
 
-<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 1 de 7 · ~25 minutos</p>
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 1 de 8 · ~25 minutos</p>
 <h1>El mapa: tres capas y dos recorridos</h1>
 <p class="subtitulo">Antes de explicar cualquier clase, tenés que saber en qué piso del edificio está.</p>
 
@@ -17,6 +17,18 @@
   <strong>Al terminar vas a poder:</strong> recorrer en voz alta un <code>POST /api/links</code> y un
   <code>GET /{alias}</code>, nombrando cada clase y en qué capa vive, y explicar la diferencia entre
   <code>Alias</code>, <code>AliasStore</code> y <code>AliasEntity</code>.
+</div>
+
+<div class="control">
+  <strong>Control de la IA en esta parte</strong>
+  <ul>
+    <li><strong>Qué verificar:</strong> que las dependencias apunten hacia adentro. Se prueba en vivo:
+    <code>rg 'import org.springframework' src/main/java/io/github/spendice/linkshortener/domain</code> no devuelve
+    nada, y los adaptadores JPA no son <code>public</code>, así que el compilador impide usarlos desde otra capa.</li>
+    <li><strong>Qué se le escapó:</strong> <code>CreateLink</code> y <code>ResolveLink</code> importan
+    <code>@Transactional</code> de Spring, y no hay un test automático de arquitectura (<a href="0008-como-controlamos-a-la-ia.html">lección 8</a>).</li>
+    <li><strong>Por qué importa:</strong> el profe mira el backend, y las capas son lo primero que va a recorrer.</li>
+  </ul>
 </div>
 
 <h2>1. El edificio</h2>
@@ -47,7 +59,9 @@ cohesión» <span class="tag c">C</span>.</p>
 
 <p><strong>La regla de oro:</strong> las dependencias apuntan <em>hacia adentro</em>. Infraestructura
 conoce a aplicación y a dominio; aplicación conoce solo a dominio; dominio no conoce a nadie.
-Lo podés probar: ningún archivo de <code>domain/</code> importa algo de Spring, solo <code>java.*</code>.</p>
+Lo podés probar: ningún archivo de <code>domain/</code> importa algo de Spring, solo <code>java.*</code>.
+Hay una excepción que conviene decir vos antes de que la encuentre el profe: los casos de uso importan
+<code>@Transactional</code> de Spring, así que la aplicación no está del todo libre del framework.</p>
 
 <p>¿Y cómo hace <code>CreateLink</code> para guardar en la base si no conoce JPA? Declara lo que
 necesita en una <strong>interfaz</strong> (<code>AliasStore</code>, <code>AssignmentStore</code>) y

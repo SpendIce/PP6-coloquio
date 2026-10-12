@@ -9,13 +9,25 @@
 <body>
 <main>
 
-<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 4 de 7 · ~15 minutos</p>
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 4 de 8 · ~15 minutos</p>
 <h1>HTTP y contrato</h1>
 <p class="subtitulo">Cada código de estado y cada header tiene un porqué. Si lo sabés, «buenas prácticas REST» deja de ser una frase.</p>
 
 <div class="victoria">
   <strong>Al terminar vas a poder:</strong> defender cada código de estado y cada header de la API
   citando la norma (RFC 9110) o un acuerdo con el profe.
+</div>
+
+<div class="control">
+  <strong>Control de la IA en esta parte</strong>
+  <ul>
+    <li><strong>El contrato fue antes que el código:</strong> <code>openapi.yaml</code> se commiteó a las 10:45 del 05/10,
+    y el primer controller a las 11:05. La IA implementó un contrato escrito; no lo inventó.</li>
+    <li><strong>Lo controlan:</strong> <code>LinkApiHttpTest.redirige302ConDestinoVerbatimYNoStore</code> y
+    <code>DestinationValidationHttpTest.rechazaPropiedadesDesconocidasDelContrato</code>
+    (<code>additionalProperties: false</code>).</li>
+    <li><strong>Para mostrar:</strong> elegí un código de respuesta del <code>openapi.yaml</code> y señalá el test que lo prueba.</li>
+  </ul>
 </div>
 
 <h2>0. Repaso de la lección 3</h2>

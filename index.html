@@ -11,8 +11,16 @@
 
 <p class="meta">Paradigmas de Programación VI · TP Integrador · Coloquio del martes 13/10/2026</p>
 <h1>Preparación del coloquio</h1>
-<p class="subtitulo">Siete lecciones cortas para explicar sin leer cada parte del acortador de enlaces: qué hace,
-por qué está así y de dónde sale el requisito.</p>
+<p class="subtitulo">Ocho lecciones cortas para explicar sin leer cada parte del acortador de enlaces: qué hace,
+por qué está así, de dónde sale el requisito y cómo sabemos que la IA lo hizo bien.</p>
+
+<div class="control">
+  <strong>Qué va a mirar el profe</strong>
+  <p>Quiere que le expliquen cómo está hecha cada parte, <strong>sobre todo el backend</strong>, y ver si pudieron
+  <strong>acotar y controlar lo que hizo la IA</strong>: si está bien, si está mal y si es entendible. Por eso cada
+  lección arranca con un recuadro como este, con qué se verificó en esa parte y qué se le escapó a la IA. La
+  <a href="lessons/0008-como-controlamos-a-la-ia.html">lección 8</a> junta todo en una respuesta.</p>
+</div>
 
 <div class="victoria">
   <strong>Cómo usarlas:</strong> una o dos por día, en orden. Cada una abre con un repaso de la anterior, tiene un
@@ -23,15 +31,18 @@ por qué está así y de dónde sale el requisito.</p>
 
 <h2>Lecciones</h2>
 <div class="tabla-scroll"><table>
-<tr><th>#</th><th>Lección</th><th>Al terminar podés…</th></tr>
-<tr><td>1</td><td><a href="lessons/0001-el-mapa-capas-y-recorridos.html">El mapa: capas y recorridos</a></td><td>Recorrer un POST y un GET clase por clase.</td></tr>
-<tr><td>2</td><td><a href="lessons/0002-alias-secuencia-reciclaje-vencimiento.html">Alias: secuencia, reciclaje y vencimiento</a></td><td>Predecir qué alias recibe la próxima creación.</td></tr>
-<tr><td>3</td><td><a href="lessons/0003-persistencia-y-concurrencia.html">Persistencia y concurrencia</a></td><td>Explicar por qué dos pedidos simultáneos no reciben el mismo alias.</td></tr>
-<tr><td>4</td><td><a href="lessons/0004-http-y-contrato.html">HTTP y contrato</a></td><td>Defender 201, 302, 400, 404 y <code>no-store</code> con la RFC.</td></tr>
-<tr><td>5</td><td><a href="lessons/0005-clientes-web-extensiones-qr.html">Clientes: web, extensiones y QR</a></td><td>Contar el flujo de la extensión y por qué el QR codifica el enlace corto.</td></tr>
-<tr><td>6</td><td><a href="lessons/0006-tests-y-evidencia.html">Tests y evidencia</a></td><td>Nombrar el test que prueba cada requisito.</td></tr>
-<tr><td>7</td><td><a href="lessons/0007-trazabilidad-y-simulacro.html">Trazabilidad y simulacro</a></td><td>Separar consigna / acordado / decidido y responder diez preguntas difíciles.</td></tr>
+<tr><th>#</th><th>Lección</th><th>Al terminar podés…</th><th>Prioridad</th></tr>
+<tr><td>1</td><td><a href="lessons/0001-el-mapa-capas-y-recorridos.html">El mapa: capas y recorridos</a></td><td>Recorrer un POST y un GET clase por clase.</td><td>Alta</td></tr>
+<tr><td>2</td><td><a href="lessons/0002-alias-secuencia-reciclaje-vencimiento.html">Alias: secuencia, reciclaje y vencimiento</a></td><td>Predecir qué alias recibe la próxima creación.</td><td>Alta</td></tr>
+<tr><td>3</td><td><a href="lessons/0003-persistencia-y-concurrencia.html">Persistencia y concurrencia</a></td><td>Explicar por qué dos pedidos simultáneos no reciben el mismo alias.</td><td>Alta</td></tr>
+<tr><td>4</td><td><a href="lessons/0004-http-y-contrato.html">HTTP y contrato</a></td><td>Defender 201, 302, 400, 404 y <code>no-store</code> con la RFC.</td><td>Alta</td></tr>
+<tr><td>5</td><td><a href="lessons/0005-clientes-web-extensiones-qr.html">Clientes: web, extensiones y QR</a></td><td>Contar el flujo de la extensión y por qué el QR codifica el enlace corto.</td><td>Baja (frontend)</td></tr>
+<tr><td>6</td><td><a href="lessons/0006-tests-y-evidencia.html">Tests y evidencia</a></td><td>Nombrar el test que prueba cada requisito.</td><td>Alta</td></tr>
+<tr><td>7</td><td><a href="lessons/0007-trazabilidad-y-simulacro.html">Trazabilidad y simulacro</a></td><td>Separar consigna / acordado / decidido y responder diez preguntas difíciles.</td><td>Media</td></tr>
+<tr><td>8</td><td><a href="lessons/0008-como-controlamos-a-la-ia.html">Cómo controlamos a la IA</a></td><td>Explicar cómo se acotó y controló a la IA, con errores concretos y evidencia.</td><td><strong>Máxima</strong></td></tr>
 </table></div>
+
+<p class="nota">Si hay poco tiempo: 1 → 8 → 2, 3, 4 y 6 → simulacro de la 7. La 5 alcanza con leer su recuadro inicial.</p>
 
 <h2>Referencia</h2>
 <p><a href="reference/mapa-del-codigo.html">Mapa del código</a>: todas las piezas con su capa, qué hacen y su origen.
@@ -45,7 +56,7 @@ Se puede imprimir para el repaso final.</p>
   <li>Código y documentación: <a href="https://github.com/SpendIce/PP6-TPIntegrador">SpendIce/PP6-TPIntegrador</a>
   (rama <code>main</code>, que incluye la migración a Gradle y el perfil HSQLDB del PR #14).</li>
   <li>Consigna: <a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/TP_PP6_v1.0.md"><code>TP_PP6_v1.0.md</code></a>.
-  No menciona el coloquio: el formato hay que confirmarlo con el profe.</li>
+  No menciona el coloquio: el formato lo adelantó el profe aparte (ver el recuadro de arriba).</li>
   <li>Las fuentes externas (RFC 9110, PostgreSQL, Cockburn, Fowler, Chrome/MDN) están citadas en cada lección.</li>
 </ul>
 

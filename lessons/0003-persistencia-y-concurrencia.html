@@ -9,13 +9,26 @@
 <body>
 <main>
 
-<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 3 de 7 · ~20 minutos</p>
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 3 de 8 · ~20 minutos</p>
 <h1>Persistencia y concurrencia</h1>
 <p class="subtitulo">Cómo la base garantiza lo que el dominio promete, aunque lleguen diez pedidos a la vez.</p>
 
 <div class="victoria">
   <strong>Al terminar vas a poder:</strong> explicar por qué dos creaciones simultáneas nunca reciben el
   mismo alias, y qué garantiza cada restricción del esquema.
+</div>
+
+<div class="control">
+  <strong>Control de la IA en esta parte</strong>
+  <ul>
+    <li><strong>Regla escrita:</strong> todo <code>*HttpTest</code> corre sobre PostgreSQL real, nunca sobre H2 ni con
+    repositorios simulados (<a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/CODING_STANDARDS.md"><code>CODING_STANDARDS.md</code></a> y ADR 0004). Así, un
+    error de SQL o de lock no queda escondido detrás de un mock.</li>
+    <li><strong>Lo controla:</strong> <code>ConcurrenciaHttpTest</code>, con seis escenarios de carreras; por ejemplo,
+    <code>competicionPorUnAliasVencidoLoObtieneExactamenteUnaCreacion</code>.</li>
+    <li><strong>Errores detectados:</strong> en el PR #14 la IA dejó el servidor HSQLDB expuesto sin contraseña y
+    afirmó algo falso sobre Flyway (<a href="0008-como-controlamos-a-la-ia.html">lección 8</a>).</li>
+  </ul>
 </div>
 
 <h2>0. Repaso de la lección 2</h2>
