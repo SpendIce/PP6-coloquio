@@ -9,13 +9,14 @@
 <body>
 <main>
 
-<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 1 de 7 · ~15 minutos</p>
+<p class="meta"><a href="../index.html">Coloquio TP Integrador</a> · Lección 1 de 7 · ~25 minutos</p>
 <h1>El mapa: tres capas y dos recorridos</h1>
 <p class="subtitulo">Antes de explicar cualquier clase, tenés que saber en qué piso del edificio está.</p>
 
 <div class="victoria">
   <strong>Al terminar vas a poder:</strong> recorrer en voz alta un <code>POST /api/links</code> y un
-  <code>GET /{alias}</code>, nombrando cada clase y en qué capa vive.
+  <code>GET /{alias}</code>, nombrando cada clase y en qué capa vive, y explicar la diferencia entre
+  <code>Alias</code>, <code>AliasStore</code> y <code>AliasEntity</code>.
 </div>
 
 <h2>1. El edificio</h2>
@@ -59,7 +60,123 @@ es <em>Ports &amp; Adapters</em>, o arquitectura hexagonal
 configuración del <code>application.yml</code> (duración, URL pública, rutas reservadas) y se los
 pasa a los casos de uso. Es el electricista: el único que ve todos los cables.</p>
 
-<h2>2. Recorrido de creación</h2>
+<h2>2. Tres niveles para la misma cosa</h2>
+
+<p>Hay un lugar donde es fácil marearse: en el código aparecen <code>Alias</code>, <code>AliasStore</code>,
+<code>JpaAliasStore</code> y <code>AliasEntity</code>. No son cuatro conceptos distintos. Es <strong>un</strong>
+concepto (el alias) visto desde tres niveles, y cada nivel responde una pregunta diferente.</p>
+
+<p class="analogia">En una obra, el plano dice «acá va una puerta de 80 cm» (qué es). El pliego dice «el
+proveedor entrega una puerta que cumpla esto» (qué se necesita). El carpintero la fabrica con su madera y sus
+herramientas (cómo se hace). Podés cambiar de carpintero sin redibujar el plano.</p>
+
+<div class="tabla-scroll"><table>
+<tr><th>Nivel</th><th>Pregunta</th><th>Alias</th><th>Asignación</th><th>Dónde vive</th></tr>
+<tr><td><strong>Dominio</strong></td><td>¿Qué <em>es</em>?</td><td><code>Alias</code></td><td><code>Assignment</code></td><td><code>domain/</code></td></tr>
+<tr><td><strong>Puerto</strong></td><td>¿Qué <em>necesita</em> el caso de uso?</td><td><code>AliasStore</code></td><td><code>AssignmentStore</code></td><td><code>application/port/</code></td></tr>
+<tr><td><strong>Adaptador</strong></td><td>¿<em>Cómo</em> se guarda?</td><td><code>JpaAliasStore</code><br><code>AliasJpaRepository</code><br><code>AliasEntity</code><br>tabla <code>alias</code></td><td><code>JpaAssignmentStore</code><br><code>AssignmentJpaRepository</code><br><code>AssignmentEntity</code><br>tabla <code>asignacion</code></td><td><code>infrastructure/persistence/</code></td></tr>
+</table></div>
+
+<h3>Nivel 1 · Dominio: qué es</h3>
+
+<p>Son dos <code>record</code> de Java: inmutables, sin anotaciones y sin importar nada de Spring ni de JPA.</p>
+<pre><code>record Alias(String code, Long currentAssignmentId)
+record Assignment(Long id, String aliasCode, String destination,
+                  Instant createdAt, Instant expiresAt)</code></pre>
+<ul>
+  <li><a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/src/main/java/io/github/spendice/linkshortener/domain/Alias.java"><code>Alias</code></a>
+  es el <strong>código</strong> (<code>x7</code>), no el enlace completo. Al construirse rechaza un código que tenga
+  caracteres fuera del alfabeto. Además apunta a su asignación actual, o a la última si ya venció.</li>
+  <li><a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/src/main/java/io/github/spendice/linkshortener/domain/Assignment.java"><code>Assignment</code></a>
+  une un alias con un destino durante un tiempo. Su única regla es <code>isActiveAt(instante)</code>, que
+  responde si sigue vigente. No sabe nada de HTTP ni de redirecciones.</li>
+</ul>
+<p>La relación entre los dos es <strong>un alias, muchas asignaciones a lo largo del tiempo</strong>. Cada pedido de
+acortar crea una asignación nueva. Cuando un alias se recicla, se agrega otra y las viejas quedan como historial
+<span class="tag t">ADR 0003</span> <span class="tag q">Q18</span>:</p>
+<pre><code>Alias "x7" ──currentAssignmentId──► Assignment #42  (vigente)
+                                    Assignment #17  (vencida, historial)
+                                    Assignment #3   (vencida, historial)</code></pre>
+<p>El enlace acortado (<code>http://host/x7</code>) <strong>no tiene clase</strong>: lo arma
+<code>LinkApiController</code> cuando responde, uniendo la URL pública configurada con el código.</p>
+
+<h3>Nivel 2 · Puerto: qué necesita el caso de uso</h3>
+
+<p>Son interfaces. Las escribe la capa de aplicación, porque es ella la que sabe qué necesita, y solo
+nombran operaciones, sin decir cómo se hacen.</p>
+<pre><code>interface AliasStore {                    interface AssignmentStore {
+    Alias claim(Instant instant);             Assignment save(Assignment a);
+    Optional&lt;Alias&gt; findByCode(String c);     Optional&lt;Assignment&gt; findById(long id);
+    void assignCurrent(String c, long id);  }
+}</code></pre>
+<ul>
+  <li><code>claim</code> reserva el próximo alias: uno vencido para reciclar o, si no hay, uno nuevo.
+  <code>assignCurrent</code> mueve el puntero del alias a la asignación recién creada.</li>
+  <li>Fijate lo que <strong>falta</strong> en <code>AssignmentStore</code>: no hay <code>update</code> ni
+  <code>delete</code>. Una asignación guardada no se toca nunca más, porque es historial. La interfaz misma
+  hace cumplir la decisión del ADR 0003.</li>
+</ul>
+
+<h3>Nivel 3 · Adaptador: cómo se guarda</h3>
+
+<p>Acá aparece la tecnología. Por cada concepto hay cuatro piezas, cada una con una sola tarea:</p>
+<pre><code>JpaAliasStore        @Component, implementa AliasStore   traduce y coordina (lock, reciclaje)
+  AliasJpaRepository   interfaz de Spring Data           Spring genera la implementación
+    AliasEntity          @Entity, mutable                representa una fila
+      tabla alias          creada por Flyway (V1)        donde quedan los datos</code></pre>
+<ul>
+  <li><strong><code>JpaAliasStore</code></strong> es el adaptador propiamente dicho: implementa el puerto. Es
+  quien <strong>traduce</strong>: recibe y devuelve <code>Alias</code> del dominio, y por dentro usa
+  <code>AliasEntity</code>.</li>
+  <li><strong><code>AliasJpaRepository</code></strong> extiende <code>JpaRepository</code>, así que
+  <code>save</code> y <code>findById</code> vienen gratis. La única consulta escrita a mano es
+  <code>findRecyclableCodes</code>, la de los alias vencidos.</li>
+  <li><strong><code>AliasEntity</code></strong> tiene lo que JPA exige y el dominio no quiere: un constructor
+  vacío, un setter y anotaciones <code>@Column</code> con los nombres en castellano de las columnas.</li>
+</ul>
+<p>Un detalle que podés mostrar en el coloquio: <code>AliasEntity</code>, <code>AssignmentEntity</code> y los
+<code>*JpaRepository</code> se declaran <strong>sin <code>public</code></strong>. Son privados del paquete
+<code>persistence</code>, así que el compilador no deja que ninguna otra capa los use. La separación no depende
+de la buena voluntad del programador: la impone Java.</p>
+
+<h3>Un viaje completo: guardar una asignación</h3>
+
+<pre><code>CreateLink        Assignment.pending("x7", url, t, t+60min)       dominio, id = null
+  │ assignments.save(…)                                  ── cruza el puerto ──
+  ▼
+JpaAssignmentStore.save
+  new AssignmentEntity("x7", url, t, t+60min)                 dominio → JPA
+  AssignmentJpaRepository.save(entity)                        INSERT INTO asignacion …
+                                                              PostgreSQL genera id = 42
+  toDomain(entity) → new Assignment(42, "x7", url, …)         JPA → dominio
+  ▲
+CreateLink        recibe un Assignment con id 42 y no se enteró de que hubo JPA</code></pre>
+
+<h3>¿Cómo se prueba que esto sirve? Con un segundo adaptador</h3>
+
+<p>En los tests, <a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/src/test/java/io/github/spendice/linkshortener/application/InMemoryStores.java"><code>InMemoryStores</code></a>
+tiene <code>FakeAliasStore</code>, que implementa el <strong>mismo puerto</strong> <code>AliasStore</code> con un
+<code>HashMap</code>. <code>CreateLinkTest</code> le pasa ese fake a <code>CreateLink</code> y prueba el caso de uso
+sin base de datos. Es el mismo puerto con dos adaptadores intercambiables, sin cambiar una línea de
+<code>CreateLink</code>.</p>
+
+<pre><code>                    ┌─► JpaAliasStore    (producción: PostgreSQL)
+CreateLink ─► AliasStore
+                    └─► FakeAliasStore   (tests: HashMap)</code></pre>
+
+<h3>¿No es demasiado? La alternativa y su costo</h3>
+
+<p>Es una pregunta probable, así que conviene tener la respuesta. Muchos proyectos Spring usan la
+<code>@Entity</code> directamente como modelo y llaman al repositorio desde el servicio. Tiene ventajas reales: hay
+menos clases y no hace falta traducir. Para un CRUD simple es razonable.</p>
+<p>El costo es que el dominio queda atado a JPA. Necesitaría un constructor vacío y sería mutable, así que
+alguien podría modificar una asignación del historial, y no se podría testear sin Hibernate. El
+<a href="https://github.com/SpendIce/PP6-TPIntegrador/blob/main/docs/adr/0001-monolito-modular.md">ADR 0001</a>
+<span class="tag t">T</span> eligió separar las reglas de los adaptadores HTTP y JPA «sin extender dependencias del
+framework a todo el sistema». Aceptó a cambio más disciplina al principio. El precio concreto son los dos
+métodos de traducción: el constructor de la entidad y <code>toDomain</code>.</p>
+
+<h2>3. Recorrido de creación</h2>
 
 <p>El usuario toca <em>Acortar</em> en la web o abre el popup de la extensión. Los dos mandan el mismo
 <code>POST /api/links {"destination": "https://…"}</code>.</p>
@@ -80,7 +197,7 @@ el caso de uso, porque "en qué host corro" es un detalle de HTTP. Si la URL es 
 <code>DestinationValidator</code> lanza <code>InvalidDestinationException</code> y
 <code>ApiExceptionHandler</code> la convierte en <code>400 {error, message}</code>.</p>
 
-<h2>3. Recorrido de resolución</h2>
+<h2>4. Recorrido de resolución</h2>
 
 <p>Alguien abre <code>http://192.168.x.y:8080/xT3</code> o escanea el QR, que contiene esa misma URL.</p>
 
@@ -99,7 +216,7 @@ cambiar la duración solo afecta a los enlaces nuevos.</p>
 
 <hr>
 
-<h2>4. Practicá (sin volver a mirar arriba)</h2>
+<h2>5. Practicá (sin volver a mirar arriba)</h2>
 
 <p class="nota">El esfuerzo de recordar es lo que fija el conocimiento. Si dudás, arriesgá igual:
 equivocarte acá es gratis.</p>
@@ -176,6 +293,54 @@ equivocarte acá es gratis.</p>
   <p class="devolucion" data-op="c" hidden>✘ Las extensiones son JavaScript y hablan con la API por HTTP; nunca tocan Java.</p>
 </section>
 
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Qué representa <code>Alias</code> en el dominio?</p>
+  <div class="opciones">
+    <button data-op="a">El código, por ejemplo <code>x7</code></button>
+    <button data-op="b">El enlace completo <code>http://host/x7</code></button>
+    <button data-op="c">El vínculo entre código y destino</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ Es solo el código, junto con el puntero a su asignación actual. El enlace completo no tiene clase: lo arma <code>LinkApiController</code>.</p>
+  <p class="devolucion" data-op="b" hidden>✘ El host es un detalle de HTTP que el dominio no conoce. <code>LinkApiController</code> une la URL pública con el código al responder.</p>
+  <p class="devolucion" data-op="c" hidden>✘ Ese vínculo es <code>Assignment</code>. El alias sobrevive a muchas asignaciones a lo largo del tiempo.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="b">
+  <p class="pregunta">¿Cuál de estas clases lleva <code>@Entity</code>?</p>
+  <div class="opciones">
+    <button data-op="a">Assignment</button>
+    <button data-op="b">AssignmentEntity</button>
+    <button data-op="c">AssignmentStore</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✘ <code>Assignment</code> es un <code>record</code> del dominio, sin anotaciones. JPA no podría usarlo: necesita un constructor vacío y campos que se puedan modificar.</p>
+  <p class="devolucion" data-op="b" hidden>✔ Vive en <code>infrastructure/persistence</code>, es privada del paquete y representa una fila de <code>asignacion</code>. <code>JpaAssignmentStore</code> la traduce a <code>Assignment</code> con <code>toDomain</code>.</p>
+  <p class="devolucion" data-op="c" hidden>✘ <code>AssignmentStore</code> es una interfaz (el puerto). No representa datos: solo declara operaciones.</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta">¿Por qué <code>AssignmentStore</code> no tiene <code>update</code> ni <code>delete</code>?</p>
+  <div class="opciones">
+    <button data-op="a">Porque las asignaciones son historial inmutable</button>
+    <button data-op="b">Porque JPA no puede actualizar un record</button>
+    <button data-op="c">Porque se borran con una tarea programada</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ ADR 0003: reciclar un alias agrega una asignación nueva y mueve el puntero, pero no modifica la anterior. El puerto no ofrece la operación, así que nadie puede hacerla por error.</p>
+  <p class="devolucion" data-op="b" hidden>✘ JPA actualiza la entidad, no el record, y <code>AliasEntity</code> se actualiza sin problema con <code>assignCurrent</code>. Es una decisión de negocio, no una limitación técnica.</p>
+  <p class="devolucion" data-op="c" hidden>✘ No hay purga: Q18 acordó «sin purga automática durante el trabajo».</p>
+</section>
+
+<section class="ejercicio quiz" data-correcta="a">
+  <p class="pregunta"><code>CreateLinkTest</code> usa <code>FakeAliasStore</code> en vez de <code>JpaAliasStore</code>. ¿Qué hubo que cambiar en <code>CreateLink</code>?</p>
+  <div class="opciones">
+    <button data-op="a">Nada: recibe otra implementación del puerto</button>
+    <button data-op="b">Un <code>if</code> que detecta el modo test</button>
+    <button data-op="c">Una anotación de perfil de Spring</button>
+  </div>
+  <p class="devolucion" data-op="a" hidden>✔ <code>CreateLink</code> depende de la interfaz <code>AliasStore</code> y recibe la implementación por el constructor. Producción le pasa la de JPA y el test le pasa la del <code>HashMap</code>.</p>
+  <p class="devolucion" data-op="b" hidden>✘ <code>CreateLink</code> no sabe que lo están testeando. Esa es justamente la ventaja del puerto.</p>
+  <p class="devolucion" data-op="c" hidden>✘ <code>CreateLinkTest</code> ni siquiera levanta Spring: construye <code>CreateLink</code> con <code>new</code>.</p>
+</section>
+
 <p class="marcador" data-quiz-marcador></p>
 
 <section class="ejercicio ordenar">
@@ -208,6 +373,23 @@ equivocarte acá es gratis.</p>
     QR lo genera el navegador a partir de ese <code>shortUrl</code>.»</p>
     <p class="nota">Chequeá: ¿dijiste las tres capas? ¿Mencionaste la transacción? ¿Dijiste que el QR
     codifica el enlace corto y no el destino?</p>
+  </details>
+</section>
+
+<section class="ejercicio oral" data-segundos="60">
+  <p class="pregunta">En voz alta, sin mirar: «¿Qué diferencia hay entre <code>Assignment</code>,
+  <code>AssignmentStore</code> y <code>AssignmentEntity</code>?»</p>
+  <details class="modelo">
+    <summary>Respuesta modelo (comparala con la tuya)</summary>
+    <p>«Son el mismo concepto en tres niveles. <code>Assignment</code> es el dominio: un record inmutable que une un
+    alias con un destino hasta su vencimiento y sabe responder si está vigente. <code>AssignmentStore</code> es el
+    puerto: la interfaz que define el caso de uso para guardar y buscar asignaciones. No tiene <code>update</code> ni
+    <code>delete</code> porque son historial. <code>AssignmentEntity</code> es parte del adaptador: la clase JPA que
+    representa una fila de la tabla <code>asignacion</code>. <code>JpaAssignmentStore</code> implementa el puerto y
+    traduce entre la entidad y el record. Gracias a eso, en los tests se reemplaza por un fake en memoria sin
+    tocar <code>CreateLink</code>.»</p>
+    <p class="nota">Chequeá: ¿dijiste qué pregunta responde cada nivel? ¿Nombraste quién traduce? ¿Diste la
+    prueba del fake de los tests?</p>
   </details>
 </section>
 
